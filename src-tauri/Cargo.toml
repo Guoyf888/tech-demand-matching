@@ -1,0 +1,15 @@
+[package]
+name = "tech-demand-matching"
+version = "1.0.0"
+description = "技术需求智能对接系统"
+authors = ["Guoyf888"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
