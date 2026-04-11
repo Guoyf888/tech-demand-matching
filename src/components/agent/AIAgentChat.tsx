@@ -244,7 +244,6 @@ export function AIAgentChat() {
               backgroundColor: themeColors?.background,
               color: themeColors?.text,
               border: `1px solid ${themeColors?.border}`,
-              focusRing: themeColors?.primary,
             }}
             rows={1}
           />

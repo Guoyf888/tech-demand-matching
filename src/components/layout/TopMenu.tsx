@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { themes, useThemeStore, Theme } from '@/store/themeStore';
 
 interface MenuItem {

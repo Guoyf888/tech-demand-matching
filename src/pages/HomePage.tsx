@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useRoleStore } from '@/store/roleStore';
 import { AIAgentChat } from '@/components/agent/AIAgentChat';
 import { themes, useThemeStore } from '@/store/themeStore';
@@ -6,7 +5,6 @@ import { themes, useThemeStore } from '@/store/themeStore';
 export function HomePage() {
   const { currentRole } = useRoleStore();
   const { theme } = useThemeStore();
-  const [showChat, setShowChat] = useState(true);
 
   const currentTheme = theme === 'system' ? 'volcano-white' : theme;
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
