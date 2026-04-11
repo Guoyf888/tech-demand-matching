@@ -1,4 +1,4 @@
-import { ApiConfig, ChatMessage, ChatCompletionOptions } from './types';
+import { ApiConfig, ChatCompletionOptions } from './types';
 
 export class ApiGateway {
   private config: ApiConfig | null = null;

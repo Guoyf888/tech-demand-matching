@@ -1,4 +1,4 @@
-import { Role } from '@/store/roleStore';
+import { Role, useRoleStore } from '@/store/roleStore';
 
 const menuItems: Record<Role, { label: string; icon: string; path: string }[]> = {
   demand: [

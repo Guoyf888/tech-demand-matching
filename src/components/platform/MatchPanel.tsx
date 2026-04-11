@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { demandStorage } from '@/services/storage/demandStorage';
 import { techStorage } from '@/services/storage/techStorage';
 import { findMatches } from '@/services/matching';

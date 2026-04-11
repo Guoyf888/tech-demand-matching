@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node)",
+      "Bash(ls -la c:/Codes/jishujingliren/src-tauri/target/release/*.exe)"
+    ]
+  }
+}
