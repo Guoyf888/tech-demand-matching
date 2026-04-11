@@ -11,9 +11,12 @@ export function TechUpload({ onUploaded }: TechUploadProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!title.trim() || !content.trim()) return;
+
+    setError(null);
 
     const result: TechResult = {
       id: techStorage.generateId(),
@@ -62,17 +65,30 @@ export function TechUpload({ onUploaded }: TechUploadProps) {
           techStorage.save(result);
           onUploaded(result);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('处理失败:', error);
+        setError(error.message || '处理失败，请检查API配置');
+        result.summary = 'API调用失败，请检查网络和API配置';
+        result.status = 'completed';
+        techStorage.save(result);
+        onUploaded(result);
       } finally {
         setIsProcessing(false);
       }
+    } else {
+      setError('请先在设置中配置API Key');
     }
   };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
       <h3 className="text-lg font-semibold mb-4">上传技术成果</h3>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+        </div>
+      )}
 
       <div className="space-y-4">
         <div>
