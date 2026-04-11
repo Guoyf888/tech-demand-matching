@@ -37,7 +37,6 @@ export function Breadcrumb() {
   };
 
   const breadcrumbs = getBreadcrumbs();
-  const currentPage = breadcrumbs[breadcrumbs.length - 1];
 
   return (
     <div className="flex items-center gap-2 text-sm mb-4">
