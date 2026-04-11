@@ -1,20 +1,34 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
+import { TopMenu } from '@/components/layout/TopMenu';
 import { Footer } from '@/components/layout/Footer';
+import { HomePage } from '@/pages/HomePage';
 import { DemandPage } from '@/pages/DemandPage';
 import { TechPage } from '@/pages/TechPage';
 import { PlatformPage } from '@/pages/PlatformPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { SkillsPage } from '@/pages/SkillsPage';
+import { themes, useThemeStore } from '@/store/themeStore';
 
 function App() {
+  const { theme } = useThemeStore();
+  const currentTheme = theme === 'system' ? 'volcano-white' : theme;
+  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <div
+        className="min-h-screen flex flex-col transition-colors duration-200"
+        style={{
+          backgroundColor: themeColors?.background,
+          color: themeColors?.text,
+        }}
+      >
+        <TopMenu />
         <Header />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto p-6" style={{ backgroundColor: themeColors?.background }}>
           <Routes>
-            <Route path="/" element={<DemandPage />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/demands" element={<DemandPage />} />
             <Route path="/reports" element={<DemandPage />} />
             <Route path="/results" element={<TechPage />} />

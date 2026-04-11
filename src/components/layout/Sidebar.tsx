@@ -1,17 +1,22 @@
+import { Link } from 'react-router-dom';
 import { Role, useRoleStore } from '@/store/roleStore';
+import { themes, useThemeStore } from '@/store/themeStore';
 
 const menuItems: Record<Role, { label: string; icon: string; path: string }[]> = {
   demand: [
-    { label: '技术需求输入', icon: '📝', path: '/' },
+    { label: 'AI对话', icon: '💬', path: '/' },
+    { label: '输入需求', icon: '📝', path: '/' },
     { label: '我的需求', icon: '📋', path: '/demands' },
     { label: '分析报告', icon: '📊', path: '/reports' },
   ],
   tech: [
+    { label: 'AI对话', icon: '💬', path: '/' },
     { label: '上传成果', icon: '📤', path: '/' },
     { label: '我的成果', icon: '📚', path: '/results' },
     { label: '团队展示', icon: '👥', path: '/team' },
   ],
   platform: [
+    { label: 'AI对话', icon: '💬', path: '/' },
     { label: '需求广场', icon: '🏢', path: '/demand-square' },
     { label: '技术广场', icon: '🎓', path: '/tech-square' },
     { label: '智能匹配', icon: '🔗', path: '/matching' },
@@ -26,25 +31,36 @@ interface SidebarProps {
 
 export function Sidebar({ activeMenu, onMenuChange }: SidebarProps) {
   const currentRole = useRoleStore((s) => s.currentRole);
+  const { theme } = useThemeStore();
   const items = menuItems[currentRole];
 
+  const currentTheme = theme === 'system' ? 'volcano-white' : theme;
+  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+
   return (
-    <aside className="w-64 bg-white dark:bg-gray-800 border-r dark:border-gray-700">
-      <nav className="p-4">
-        <ul className="space-y-2">
+    <aside
+      className="w-56 rounded-xl overflow-hidden"
+      style={{
+        backgroundColor: themeColors?.surface,
+        border: `1px solid ${themeColors?.border}`,
+      }}
+    >
+      <nav className="p-3">
+        <ul className="space-y-1">
           {items.map((item) => (
             <li key={item.label}>
-              <button
+              <Link
+                to={item.path}
                 onClick={() => onMenuChange(item.label)}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-all flex items-center gap-3 ${
-                  activeMenu === item.label
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600'
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg transition-all"
+                style={{
+                  backgroundColor: activeMenu === item.label ? themeColors?.primary + '20' : 'transparent',
+                  color: activeMenu === item.label ? themeColors?.primary : themeColors?.text,
+                }}
               >
                 <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
+                <span className="text-sm">{item.label}</span>
+              </Link>
             </li>
           ))}
         </ul>
