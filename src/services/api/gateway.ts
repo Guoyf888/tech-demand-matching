@@ -1,18 +1,62 @@
-import { ApiConfig, ChatCompletionOptions } from './types';
+import { ApiConfig, ChatCompletionOptions, Provider } from './types';
+import { useApiStore } from '@/store/apiStore';
 
 export class ApiGateway {
-  private config: ApiConfig | null = null;
+  // Get config from store, prioritizing the active provider
+  private getConfigFromStore(): ApiConfig | null {
+    const state = useApiStore.getState();
+    const { configs, activeProvider } = state;
 
-  setConfig(config: ApiConfig) {
-    this.config = config;
+    // First check if active provider has config
+    if (configs[activeProvider]) {
+      const config = configs[activeProvider];
+      // Validate that the config has required fields
+      if (config && config.apiKey && config.baseUrl && config.modelId) {
+        return config;
+      }
+    }
+
+    // Otherwise find the first provider that has a complete config
+    const providers: Provider[] = ['minimax', 'openai', 'claude', 'qwen', 'ernie', 'zhipu', 'kimi', 'openrouter', 'gemini', 'custom'];
+    for (const provider of providers) {
+      const config = configs[provider];
+      if (config && config.apiKey && config.baseUrl && config.modelId) {
+        return config;
+      }
+    }
+
+    return null;
   }
 
   getConfig(): ApiConfig | null {
-    return this.config;
+    return this.getConfigFromStore();
   }
 
   isConfigured(): boolean {
-    return this.config !== null && this.config.apiKey.length > 0;
+    return this.getConfigFromStore() !== null;
+  }
+
+  getActiveProvider(): Provider | null {
+    const state = useApiStore.getState();
+    const { configs, activeProvider } = state;
+
+    if (configs[activeProvider]) {
+      const config = configs[activeProvider];
+      if (config && config.apiKey && config.baseUrl && config.modelId) {
+        return activeProvider;
+      }
+    }
+
+    // Find first configured provider
+    const providers: Provider[] = ['minimax', 'openai', 'claude', 'qwen', 'ernie', 'zhipu', 'kimi', 'openrouter', 'gemini', 'custom'];
+    for (const provider of providers) {
+      const config = configs[provider];
+      if (config && config.apiKey && config.baseUrl && config.modelId) {
+        return provider;
+      }
+    }
+
+    return null;
   }
 
   private buildRequest(provider: string, apiKey: string, baseUrl: string, modelId: string, options: ChatCompletionOptions) {
@@ -98,23 +142,59 @@ export class ApiGateway {
     return { endpoint, headers, body };
   }
 
+  /**
+   * 验证API配置是否完整
+   */
+  validateConfig(): { valid: boolean; error?: string } {
+    const config = this.getConfigFromStore();
+
+    if (!config) {
+      return {
+        valid: false,
+        error: 'API未配置，请先在设置中配置API Key、API地址和模型ID'
+      };
+    }
+
+    if (!config.apiKey) {
+      return {
+        valid: false,
+        error: 'API Key未配置，请在设置中填写API Key'
+      };
+    }
+
+    if (!config.baseUrl) {
+      return {
+        valid: false,
+        error: 'API地址未配置，请在设置中填写API地址'
+      };
+    }
+
+    if (!config.modelId) {
+      return {
+        valid: false,
+        error: '模型ID未配置，请在设置中填写模型ID'
+      };
+    }
+
+    return { valid: true };
+  }
+
   async chat(options: ChatCompletionOptions): Promise<Response> {
-    if (!this.config) {
-      throw new Error('API未配置，请先在设置中配置API Key');
+    // 验证配置
+    const configValidation = this.validateConfig();
+    if (!configValidation.valid) {
+      throw new Error(configValidation.error);
     }
 
-    const { provider, apiKey, baseUrl, modelId } = this.config;
-
-    if (!baseUrl) {
-      throw new Error(`${provider} 的 API地址未配置`);
-    }
-
-    if (!modelId) {
-      throw new Error('模型ID未配置');
-    }
+    const config = this.getConfigFromStore()!;
+    const { provider, apiKey, modelId } = config;
+    const baseUrl = config.baseUrl || '';
 
     try {
       const { endpoint, headers, body } = this.buildRequest(provider, apiKey, baseUrl, modelId, options);
+
+      // 记录请求日志（调试用）
+      console.log(`[API请求] ${provider} -> ${endpoint}`);
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -122,24 +202,56 @@ export class ApiGateway {
         body: JSON.stringify(body),
       });
 
+      // 处理HTTP错误
       if (!response.ok) {
-        let errorMessage = `请求失败: ${response.status} ${response.statusText}`;
+        let errorMessage = `请求失败 (${response.status}): ${response.statusText}`;
+
         try {
           const errorData = await response.json();
+
+          // 尝试从各种API错误格式中提取错误信息
           if (errorData.error?.message) {
             errorMessage = errorData.error.message;
+          } else if (errorData.error?.code) {
+            errorMessage = `${errorData.error.code}: ${errorData.error.message || errorData.error.type || '未知错误'}`;
+          } else if (typeof errorData.error === 'string') {
+            errorMessage = errorData.error;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+
+          // 特定状态码的错误提示
+          if (response.status === 401) {
+            errorMessage = 'API密钥无效或已过期，请检查设置中的API Key';
+          } else if (response.status === 403) {
+            errorMessage = 'API访问被拒绝，请检查API Key是否有权限';
+          } else if (response.status === 429) {
+            errorMessage = 'API请求频率超限，请稍后重试';
+          } else if (response.status >= 500) {
+            errorMessage = 'API服务器错误，请稍后重试';
           }
         } catch {
-          // ignore JSON parse error
+          // 响应不是JSON格式，使用默认错误信息
+          if (response.status === 401) {
+            errorMessage = 'API密钥无效或已过期，请检查设置中的API Key';
+          } else if (response.status === 403) {
+            errorMessage = 'API访问被拒绝，请检查API Key是否有权限';
+          } else if (response.status === 429) {
+            errorMessage = 'API请求频率超限，请稍后重试';
+          }
         }
+
         throw new Error(errorMessage);
       }
 
       return response;
     } catch (error: any) {
-      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('network')) {
+      // 处理网络错误
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
         throw new Error(`网络连接失败，请检查：\n1. 您的网络是否正常\n2. API地址(${baseUrl})是否可访问\n3. 是否需要代理`);
       }
+
+      // 保留原始错误信息
       throw error;
     }
   }

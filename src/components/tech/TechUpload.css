@@ -1,0 +1,291 @@
+/* 完全对齐输入需求的样式体系 */
+.tech-upload-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+/* 页面标题（对齐输入需求的标题样式） */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.page-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+/* API状态徽章（对齐输入需求的状态提示样式） */
+.api-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background-color: #f7f8fa;
+}
+
+.status-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.status-icon.success {
+  background-color: #e8f5e9;
+  color: #00B42A;
+}
+
+.status-icon.error {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.status-text {
+  font-size: 14px;
+  color: #4a4a4a;
+}
+
+/* 错误提示（对齐输入需求的错误提示样式） */
+.error-box {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.error-validate {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecdd3;
+}
+
+.error-api {
+  background: #fef7fb;
+  color: #9f7aea;
+  border: 1px solid #f5d0fe;
+}
+
+.error-network {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.error-server {
+  background: #fff7ed;
+  color: #ea580c;
+  border: 1px solid #fed7aa;
+}
+
+/* 表单容器（对齐输入需求的表单布局） */
+.form-container {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+/* 表单项（对齐输入需求的表单项样式） */
+.form-item {
+  margin-bottom: 24px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.required {
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1a1a1a;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #00B42A;
+  box-shadow: 0 0 0 2px rgba(0, 180, 42, 0.1);
+}
+
+.form-input.invalid {
+  border-color: #dc2626;
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1a1a1a;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+  line-height: 1.5;
+}
+
+.form-textarea:focus {
+  border-color: #00B42A;
+  box-shadow: 0 0 0 2px rgba(0, 180, 42, 0.1);
+}
+
+.form-textarea.invalid {
+  border-color: #dc2626;
+}
+
+/* 字符计数（对齐输入需求的计数样式） */
+.char-count {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #717171;
+}
+
+.count-error {
+  color: #dc2626;
+  margin-left: 4px;
+}
+
+/* 表单提示（对齐输入需求的提示样式） */
+.form-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #717171;
+  line-height: 1.4;
+}
+
+/* 操作按钮（完全对齐输入需求的按钮样式） */
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.btn {
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btn-secondary {
+  background-color: #f3f4f6;
+  color: #4a4a4a;
+  border: 1px solid #d1d5db;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #e5e7eb;
+  color: #1a1a1a;
+}
+
+.btn-primary {
+  background-color: #00B42A;
+  color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #008a1e;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn.loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.btn.loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffffff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: translateY(-50%) rotate(0deg); }
+  100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* 分析结果预览（对齐输入需求的结果展示样式） */
+.result-preview {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.result-preview h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.result-section {
+  margin-bottom: 16px;
+}
+
+.result-section h4 {
+  font-size: 14px;
+  font-weight: 500;
+  color: #4a4a4a;
+  margin-bottom: 8px;
+}
+
+.result-content, .result-summary {
+  font-size: 14px;
+  color: #1a1a1a;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.result-summary {
+  background-color: #f7f8fa;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 3px solid #00B42A;
+}

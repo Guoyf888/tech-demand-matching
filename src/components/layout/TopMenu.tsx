@@ -1,200 +1,236 @@
-import { useState, useRef, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { themes, useThemeStore, Theme } from '@/store/themeStore';
+import { useState } from 'react';
+import { useLocation, Link } from 'react-router-dom';
+import { themes, useThemeStore } from '@/store/themeStore';
 
-interface MenuItem {
-  label: string;
-  items: { label: string; action?: () => void; divider?: boolean }[];
-}
-
+// 顶部导航
 export function TopMenu() {
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [showThemePicker, setShowThemePicker] = useState(false);
-  const { theme, setTheme } = useThemeStore();
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   const location = useLocation();
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpenMenu(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleThemeChange = (newTheme: Theme) => {
-    setTheme(newTheme);
-    setShowThemePicker(false);
-  };
-
-  const currentTheme = theme === 'system' ? 'volcano-white' : theme;
+  const currentTheme = useThemeStore.getState().getEffectiveTheme();
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
 
-  const menus: MenuItem[] = [
-    {
-      label: '文件',
-      items: [
-        { label: '新建需求', action: () => {} },
-        { label: '新建成果', action: () => {} },
-        { divider: true, label: '' },
-        { label: '导入文件', action: () => {} },
-        { label: '导出数据', action: () => {} },
-        { divider: true, label: '' },
-        { label: '退出', action: () => window.close() },
-      ],
-    },
-    {
-      label: '编辑',
-      items: [
-        { label: '撤销', action: () => document.execCommand('undo') },
-        { label: '重做', action: () => document.execCommand('redo') },
-        { divider: true, label: '' },
-        { label: '剪切', action: () => document.execCommand('cut') },
-        { label: '复制', action: () => document.execCommand('copy') },
-        { label: '粘贴', action: () => document.execCommand('paste') },
-      ],
-    },
-    {
-      label: '选择',
-      items: [
-        { label: '全选', action: () => document.execCommand('selectAll') },
-      ],
-    },
-    {
-      label: '查看',
-      items: [
-        { label: '重新加载', action: () => window.location.reload() },
-        { label: '切换全屏', action: () => {} },
-        { divider: true, label: '' },
-        { label: '放大', action: () => {} },
-        { label: '缩小', action: () => {} },
-        { label: '重置缩放', action: () => {} },
-      ],
-    },
-    {
-      label: '设置',
-      items: [
-        { label: '偏好设置', action: () => {} },
-        { divider: true, label: '' },
-        { label: '主题颜色', action: () => setShowThemePicker(!showThemePicker) },
-        { label: '关于', action: () => {} },
-      ],
-    },
+  // 核心功能标签
+  const coreTabs = [
+    { key: '/', label: '首页', icon: '🏠' },
+    { key: '/demands', label: '需求', icon: '📋' },
+    { key: '/results', label: '成果', icon: '💡' },
+    { key: '/matching', label: '匹配', icon: '🤝' },
+    { key: '/skills', label: '技能', icon: '🛠️' },
   ];
 
+  const isActive = (path: string) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
+  };
+
   return (
-    <div className="relative" ref={menuRef}>
-      <div
-        className="flex items-center h-8 text-sm border-b"
+    <>
+      {/* 顶部导航栏 */}
+      <header
+        className="h-12 flex items-center px-4 flex-shrink-0"
         style={{
           backgroundColor: themeColors?.surface,
-          borderColor: themeColors?.border,
-          color: themeColors?.text,
+          borderBottom: `1px solid ${themeColors?.border}`,
         }}
       >
-        {menus.map((menu) => (
-          <div key={menu.label} className="relative">
-            <button
-              className="px-3 h-8 hover:bg-opacity-50 transition-colors"
-              style={{ backgroundColor: openMenu === menu.label ? themeColors?.surfaceHover : 'transparent' }}
-              onClick={() => setOpenMenu(openMenu === menu.label ? null : menu.label)}
-              onMouseEnter={() => openMenu && setOpenMenu(menu.label)}
-            >
-              {menu.label}
-            </button>
-            {openMenu === menu.label && (
-              <div
-                className="absolute top-full left-0 min-w-48 py-1 rounded shadow-lg z-50"
-                style={{
-                  backgroundColor: themeColors?.surface,
-                  border: `1px solid ${themeColors?.border}`,
-                }}
-              >
-                {menu.items.map((item, idx) =>
-                  item.divider ? (
-                    <div
-                      key={idx}
-                      className="my-1 border-t"
-                      style={{ borderColor: themeColors?.border }}
-                    />
-                  ) : (
-                    <button
-                      key={item.label}
-                      className="w-full px-4 py-1.5 text-left hover:bg-opacity-50 transition-colors text-sm"
-                      style={{
-                        backgroundColor: 'transparent',
-                        color: themeColors?.text,
-                      }}
-                      onClick={() => {
-                        item.action?.();
-                        setOpenMenu(null);
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.target as HTMLElement).style.backgroundColor = themeColors?.surfaceHover || '';
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.target as HTMLElement).style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      {item.label}
-                    </button>
-                  )
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* 右侧 - 页面标题 */}
-        <div className="flex-1 text-center text-xs" style={{ color: themeColors?.textSecondary }}>
-          {location.pathname === '/' && '首页 - AI 对话'}
-          {location.pathname === '/settings' && '设置'}
-          {location.pathname === '/skills' && '技能市场'}
+        {/* Logo区域 */}
+        <div className="flex items-center gap-2 mr-6">
+          <span className="text-xl">🤖</span>
+          <span
+            className="font-semibold text-base"
+            style={{ color: themeColors?.text }}
+          >
+            技术对接
+          </span>
         </div>
 
-        {/* 主题选择器 */}
-        {showThemePicker && (
-          <div className="absolute right-4 top-full mt-1 p-3 rounded-lg shadow-lg z-50 w-64"
-            style={{
-              backgroundColor: themeColors?.surface,
-              border: `1px solid ${themeColors?.border}`,
-            }}
-          >
-            <div className="text-xs font-medium mb-2" style={{ color: themeColors?.textSecondary }}>选择主题</div>
-            <div className="grid grid-cols-2 gap-2">
-              {(['volcano-white', 'star-black', 'tech-blue', 'berry-pink'] as const).map((t) => (
-                <button
-                  key={t}
-                  className="flex items-center gap-2 p-2 rounded-lg transition-all"
-                  style={{
-                    backgroundColor: theme === t ? themeColors?.primaryHover : themeColors?.surfaceHover,
-                    border: `2px solid ${theme === t ? themeColors?.primary : themeColors?.border}`,
-                  }}
-                  onClick={() => handleThemeChange(t)}
-                >
-                  <div
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: themes[t].colors.primary }}
-                  />
-                  <span className="text-xs">{themes[t].name}</span>
-                </button>
-              ))}
-            </div>
-            <button
-              className="w-full mt-2 p-2 rounded-lg text-xs transition-all"
+        {/* 核心标签 - 居中显示 */}
+        <nav className="flex items-center gap-1 flex-1 justify-center">
+          {coreTabs.map((tab) => (
+            <Link
+              key={tab.key}
+              to={tab.key}
+              className="relative px-5 py-2 rounded-lg text-sm font-medium transition-all"
               style={{
-                backgroundColor: themeColors?.surfaceHover,
-                border: `1px solid ${themeColors?.border}`,
+                backgroundColor: 'transparent',
+                color: isActive(tab.key)
+                  ? themeColors?.primary
+                  : themeColors?.textSecondary,
               }}
-              onClick={() => handleThemeChange('system')}
             >
-              跟随系统
+              <span>{tab.label}</span>
+
+              {/* 选中下划线指示器 */}
+              {isActive(tab.key) && (
+                <div
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full"
+                  style={{ backgroundColor: themeColors?.primary }}
+                />
+              )}
+
+              {/* Hover效果 */}
+              {!isActive(tab.key) && (
+                <div
+                  className="absolute inset-0 rounded-lg opacity-0 hover:opacity-100 transition-opacity"
+                  style={{ backgroundColor: themeColors?.surfaceHover }}
+                />
+              )}
+            </Link>
+          ))}
+        </nav>
+
+        {/* 右侧操作按钮 */}
+        <div className="flex items-center gap-2">
+          {/* 刷新按钮 */}
+          <button
+            onClick={() => window.location.reload()}
+            className="w-8 h-8 flex items-center justify-center rounded-lg transition-all hover:scale-105"
+            style={{
+              backgroundColor: themeColors?.surfaceHover,
+              color: themeColors?.textSecondary,
+            }}
+            title="刷新页面"
+          >
+            🔄
+          </button>
+
+          {/* 主题切换 */}
+          <button
+            onClick={() => {
+              const isDark = themes[currentTheme as keyof typeof themes]?.isDark;
+              const newTheme = isDark ? 'volcano-white' : 'star-black';
+              useThemeStore.getState().setTheme(newTheme);
+            }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg transition-all hover:scale-105"
+            style={{
+              backgroundColor: themeColors?.surfaceHover,
+              color: themeColors?.textSecondary,
+            }}
+            title={themes[currentTheme as keyof typeof themes]?.isDark ? '切换浅色模式' : '切换深色模式'}
+          >
+            {themes[currentTheme as keyof typeof themes]?.isDark ? '☀️' : '🌙'}
+          </button>
+
+          {/* 更多菜单 */}
+          <div className="relative">
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg transition-all hover:scale-105"
+              style={{
+                backgroundColor: isMenuOpen
+                  ? themeColors?.primaryLight
+                  : themeColors?.surfaceHover,
+                color: isMenuOpen
+                  ? themeColors?.primary
+                  : themeColors?.textSecondary,
+              }}
+              title="更多功能"
+            >
+              ☰
             </button>
+
+            {/* 下拉菜单 */}
+            {isMenuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setIsMenuOpen(false)}
+                />
+                <div
+                  className="absolute right-0 top-full mt-2 w-48 rounded-lg shadow-lg z-40 py-1 animate-scale-in"
+                  style={{
+                    backgroundColor: themeColors?.surface,
+                    border: `1px solid ${themeColors?.border}`,
+                  }}
+                >
+                  <Link
+                    to="/ai"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                    style={{
+                      backgroundColor:
+                        location.pathname === '/ai'
+                          ? themeColors?.primaryLight
+                          : 'transparent',
+                      color:
+                        location.pathname === '/ai'
+                          ? themeColors?.primary
+                          : themeColors?.text,
+                    }}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <span>💬</span>
+                    <span>AI对话</span>
+                  </Link>
+
+                  <Link
+                    to="/terminal"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                    style={{
+                      backgroundColor:
+                        location.pathname === '/terminal'
+                          ? themeColors?.primaryLight
+                          : 'transparent',
+                      color:
+                        location.pathname === '/terminal'
+                          ? themeColors?.primary
+                          : themeColors?.text,
+                    }}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <span>⬛</span>
+                    <span>终端</span>
+                  </Link>
+
+                  <Link
+                    to="/drafts"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                    style={{
+                      backgroundColor:
+                        location.pathname === '/drafts'
+                          ? themeColors?.primaryLight
+                          : 'transparent',
+                      color:
+                        location.pathname === '/drafts'
+                          ? themeColors?.primary
+                          : themeColors?.text,
+                    }}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <span>📝</span>
+                    <span>草稿箱</span>
+                  </Link>
+
+                  <div
+                    style={{ borderTop: `1px solid ${themeColors?.border}` }}
+                    className="my-1"
+                  />
+
+                  <Link
+                    to="/settings"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                    style={{
+                      backgroundColor:
+                        location.pathname === '/settings'
+                          ? themeColors?.primaryLight
+                          : 'transparent',
+                      color:
+                        location.pathname === '/settings'
+                          ? themeColors?.primary
+                          : themeColors?.text,
+                    }}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <span>⚙️</span>
+                    <span>系统设置</span>
+                  </Link>
+                </div>
+              </>
+            )}
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      </header>
+    </>
   );
 }

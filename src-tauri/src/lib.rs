@@ -1,0 +1,1 @@
+// Minimal lib.rs for Tauri app

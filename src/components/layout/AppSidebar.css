@@ -1,0 +1,235 @@
+/**
+ * 统一侧边栏导航样式 - 企业级腾讯/阿里风格
+ * 基于Ant Design/Tencent Cloud设计规范
+ */
+
+.app-sidebar {
+  width: var(--sidebar-width-expanded);
+  height: 100vh;
+  background-color: var(--color-bg-container);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-fixed);
+  transition: width 0.2s ease;
+  overflow: hidden;
+}
+
+.app-sidebar.collapsed {
+  width: var(--sidebar-width-collapsed);
+}
+
+/* ==================== Logo区域 ==================== */
+.sidebar-logo {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-base);
+  border-bottom: 1px solid var(--color-border-secondary);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.logo-icon-wrapper {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-ai-purple) 100%);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.logo-icon {
+  color: #ffffff;
+}
+
+.logo-text {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==================== 导航列表 ==================== */
+.sidebar-nav {
+  flex: 1;
+  padding: var(--spacing-sm);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ==================== 导航项 ==================== */
+.nav-item-wrapper {
+  margin-bottom: 2px;
+}
+
+.nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 10px var(--spacing-sm);
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  position: relative;
+  text-align: left;
+  min-height: 40px;
+}
+
+.nav-item:hover {
+  background-color: var(--color-bg-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.nav-item.active {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.nav-item-sub {
+  font-size: var(--font-size-xs);
+  padding: 8px var(--spacing-sm);
+}
+
+/* ==================== 导航图标 ==================== */
+.nav-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+/* ==================== 导航文字 ==================== */
+.nav-item-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+/* ==================== 箭头图标 ==================== */
+.nav-item-arrow {
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+  opacity: 0.6;
+}
+
+.nav-item-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+/* ==================== 激活指示器 ==================== */
+.active-indicator {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background-color: var(--color-primary);
+  border-radius: 0 2px 2px 0;
+}
+
+.active-indicator-collapsed {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 4px;
+  background-color: var(--color-primary);
+  border-radius: 50%;
+}
+
+/* ==================== 子菜单 ==================== */
+.nav-children {
+  margin-top: 2px;
+  animation: slideDown 0.15s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==================== 底部工具栏 ==================== */
+.sidebar-footer {
+  padding: var(--spacing-sm);
+  border-top: 1px solid var(--color-border-secondary);
+  flex-shrink: 0;
+}
+
+.sidebar-footer .nav-item {
+  margin-bottom: 2px;
+}
+
+/* ==================== 折叠状态适配 ==================== */
+.app-sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 10px 8px;
+}
+
+.app-sidebar.collapsed .nav-item-icon {
+  min-width: 24px;
+}
+
+.app-sidebar.collapsed .logo-text {
+  display: none;
+}
+
+.app-sidebar.collapsed .logo-icon-wrapper {
+  margin: 0 auto;
+}
+
+/* ==================== 滚动条样式 ==================== */
+.sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-border-strong);
+}
+
+/* ==================== Hover动画效果 ==================== */
+.nav-item:active:not(.active) {
+  background-color: var(--color-bg-surface-active);
+}
+
+/* ==================== 工具提示（折叠状态）==================== */
+.app-sidebar.collapsed .nav-item[title] {
+  position: relative;
+}

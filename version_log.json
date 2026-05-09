@@ -1,0 +1,431 @@
+[
+  {
+    "version": "v1.6.0",
+    "update_time": "2026-04-30 16:00:00",
+    "content": [
+      "优化AI对话界面：移除AI技术经理人独立Tab模式，功能合并到AI对话/Hermes/智能Agent中",
+      "简化对话模式Tab：AI对话 / Hermes / 智能Agent / Claude终端（4个模式）",
+      "移除tech-brain相关代码：状态变量、处理函数、UI区域（约160行代码）",
+      "客户端图标配置优化：窗口图标配置为机器人头像图标",
+      "版本号更新至v1.6.0"
+    ]
+  },
+  {
+    "version": "v1.5.5",
+    "update_time": "2026-04-30 14:00:00",
+    "content": [
+      "新增文档上传功能：AI对话、需求输入、技术成果上传页面均支持WORD/PDF文档上传",
+      "智能解析文档内容：自动提取文本、自动判断类型（需求/成果）、智能打标签",
+      "行业标签自动识别：支持人工智能、新能源、医疗健康、智能制造等12个行业",
+      "技术领域自动识别：支持算法、软件、硬件、通信、安全、数据等8个领域",
+      "安装mammoth和pdf-parse依赖支持DOCX和PDF解析",
+      "修复技术成果上传时的验证错误（正则表达式问题）"
+    ]
+  },
+  {
+    "version": "v1.5.3",
+    "update_time": "2026-04-30 11:20:00",
+    "content": [
+      "AI对话空状态UI全新设计：渐变背景图标+快捷功能入口",
+      "AI技术经理人空状态优化：渐变图标+服务描述+快捷提问",
+      "替换所有emoji为Lucide专业图标",
+      "新增快捷功能按钮引导用户操作"
+    ]
+  },
+  {
+    "version": "v1.5.2",
+    "update_time": "2026-04-26 17:30:00",
+    "content": [
+      "AI对话模型选择增加记忆功能：默认选中最近一次成功使用的模型",
+      "系统设置「关于」版本号自动同步version_log.json最新版本",
+      "AboutSettings组件从version_log.json读取最新版本并展示"
+    ]
+  },
+  {
+    "version": "v1.5.1",
+    "update_time": "2026-04-26 17:00:00",
+    "content": [
+      "修复导航功能：AppSidebar新增「系统设置」导航项",
+      "底部工具栏保留主题切换和折叠按钮",
+      "支持访问大模型API配置、主题切换、关于等设置页面"
+    ]
+  },
+  {
+    "version": "v1.5.0",
+    "update_time": "2026-04-26 16:30:00",
+    "content": [
+      "企业级UI全面改版 - 腾讯/阿里风格",
+      "新建完整CSS设计令牌系统（色彩/间距/阴影/圆角/字体/动画）",
+      "安装Lucide React专业图标库",
+      "AppSidebar重构：替换emoji为SVG图标，新增子菜单支持",
+      "AIAgentChat样式重写：专业聊天气泡/加载状态/终端样式",
+      "App.tsx简化：移除冗余主题逻辑，使用CSS变量体系",
+      "整体视觉升级：阴影系统/hover动画/focus状态"
+    ]
+  },
+  {
+    "version": "v1.4.0",
+    "update_time": "2026-04-13 22:00:00",
+    "content": [
+      "UI优化：VSCode风格统一侧边栏导航",
+      "新建AppSidebar组件：图标导航+折叠展开+主题切换",
+      "App.tsx重构：移除TopMenu+Header，使用统一侧边栏",
+      "首页重构：全屏显示AIAgentChat，最大化对话体验",
+      "页面适配：移除Demand/Tech/Platform页面冗余侧边栏",
+      "统一导航体验：所有页面共享AppSidebar"
+    ]
+  },
+  {
+    "version": "v1.3.0",
+    "update_time": "2026-04-13 21:00:00",
+    "content": [
+      "回退v1.2.9左侧侧边栏设计，恢复原有顶部导航布局",
+      "恢复TopMenu+Header+Footer导航结构",
+      "保留AIAgentChat组件和/ai路由"
+    ]
+  },
+  {
+    "version": "v1.2.9",
+    "update_time": "2026-04-13 20:30:00",
+    "content": [
+      "新增左侧可折叠侧边栏SidebarNav：替代顶部导航",
+      "侧边栏支持收起/展开：收起仅显示图标(60px)，展开显示图标+文字(220px)",
+      "侧边栏导航项：首页/AI对话/需求管理/技术成果/智能匹配/技能市场/终端/设置",
+      "App.tsx重构：SidebarNav固定左侧，主内容区右侧响应式布局",
+      "新增HomePage.css适配侧边栏布局样式"
+    ]
+  },
+  {
+    "version": "v1.2.8",
+    "update_time": "2026-04-13 20:00:00",
+    "content": [
+      "重构顶部导航组件：合并为单行HeaderNav",
+      "新增底部版本组件FooterVersion：自动同步版本号",
+      "新增AboutSettings：设置页可编辑版本信息",
+      "底部版本号与设置页版本信息自动同步",
+      "App.tsx集成HeaderNav+FooterVersion，移除TopMenu/Header/Footer"
+    ]
+  },
+  {
+    "version": "v1.2.7",
+    "update_time": "2026-04-13 19:30:00",
+    "content": [
+      "新增版本号配置模块（src/config/versionConfig.tsx）",
+      "统一管理系统版本，支持版本信息持久化",
+      "App.tsx集成VersionProvider全局配置",
+      "AboutPanel使用VersionContext获取当前版本"
+    ]
+  },
+  {
+    "version": "v1.2.6",
+    "update_time": "2026-04-13 19:00:00",
+    "content": [
+      "AIAgentChat布局优化：标题+模型选择器在左，Tab切换在右",
+      "Tab标签更新为：AI对话 / Hermes / AI技术经理人 / Claude终端",
+      "新增完整CSS样式：消息气泡(用户/AI/Hermes/终端)/输入框/发送按钮",
+      "技能快捷按钮和Hermes按钮样式优化"
+    ]
+  },
+  {
+    "version": "v1.2.5",
+    "update_time": "2026-04-13 18:30:00",
+    "content": [
+      "修复AI对话路由丢失问题，恢复/ai路由指向AIAgentChat组件",
+      "TopMenu下拉菜单中AI对话功能恢复正常"
+    ]
+  },
+  {
+    "version": "v1.2.4",
+    "update_time": "2026-04-13 18:00:00",
+    "content": [
+      "系统设置页面新增【关于】面板",
+      "动态读取version_log.json显示版本更新记录",
+      "关于面板展示：当前版本号/更新时间/版本历史/更新内容",
+      "每次打包自动同步版本号及修改记录"
+    ]
+  },
+  {
+    "version": "v1.2.3",
+    "update_time": "2026-04-13 17:30:00",
+    "content": [
+      "修复侧边栏角色菜单问题，恢复基于Role的独立菜单显示",
+      "需求角色：AI对话/输入需求/我的需求/分析报告",
+      "技术角色：AI对话/上传成果/我的成果/团队展示",
+      "平台角色：AI对话/需求广场/技术广场/智能匹配/合作管理",
+      "暂时移除收起功能，恢复原有稳定版本"
+    ]
+  },
+  {
+    "version": "v1.2.2",
+    "update_time": "2026-04-13 17:00:00",
+    "content": [
+      "侧边栏恢复原有简洁设计（基于Role角色切换）",
+      "侧边栏支持收起/展开功能，点击底部◀/▶按钮切换",
+      "收起时仅显示图标，展开时显示图标+文字",
+      "修复DemandPage/TechPage/PlatformPage侧边栏props缺失问题"
+    ]
+  },
+  {
+    "version": "v1.2.1",
+    "update_time": "2026-04-13 16:30:00",
+    "content": [
+      "回退Apple HIG风格设计，恢复原有WiseMind UI风格",
+      "恢复火山白/星空黑/科技蓝/冰莓粉四套主题配置",
+      "恢复TopMenu顶部导航栏",
+      "移除Apple Dock底部导航组件",
+      "保留新增的颜色属性（textHint/primaryLight/success/error等）兼容原有组件"
+    ]
+  },
+  {
+    "version": "v1.2.0",
+    "update_time": "2026-04-13 16:00:00",
+    "content": [
+      "Apple HIG风格升级：完整重构UI为Apple Human Interface Guidelines设计规范",
+      "主题系统重构（themeStore.ts）：Apple标准色板 #007AFF蓝/#AF52DE紫/#34C759绿",
+      "新增aiPurple/aiPurpleLight/danger/dangerLight/error/errorLight等功能色",
+      "浅色主题背景从#FFFFFF改为#F5F5F7，20色完整配置",
+      "CSS变量系统重构（index.css）：Apple字体栈/层级化字号/多层阴影/精确动效时长",
+      "新增Apple Dock底部导航（components/layout/Dock.tsx）：毛玻璃背景+悬停放大效果",
+      "Dock导航5图标：对话(/ai)/需求(/demands)/成果(/results)/匹配(/matching)/报告(/reports)",
+      "App.tsx移除TopMenu，集成Dock组件，内容区域padding-bottom:80px适配Dock"
+    ]
+  },
+  {
+    "version": "v1.1.8",
+    "update_time": "2026-04-13 14:00:00",
+    "content": [
+      "新增全局模型配置模块（src/config/modelConfig.tsx）：默认模型设置、全局模型切换、配置持久化",
+      "新增模型设置页面（src/components/settings/ModelSettings.tsx）：配置MiniMax/Claude/GPT的API密钥/地址/版本",
+      "科技服务支持模型选择：TechDemandChat新增模型选择下拉框（默认/MiniMax/Claude/GPT）",
+      "executeTechService支持传入ModelConfig参数：根据选择的模型动态调用对应API",
+      "App.tsx集成ModelConfigProvider：全局模型配置上下文供所有组件使用",
+      "配置持久化：模型配置自动保存到localStorage，刷新页面不丢失"
+    ]
+  },
+  {
+    "version": "v1.1.7",
+    "update_time": "2026-04-13 12:00:00",
+    "content": [
+      "核心修复：重构claudeChat服务，支持MiniMax API调用（CLI优先回退到API Gateway）",
+      "核心修复：executeTechService增加完善错误处理、超时重试、兜底逻辑",
+      "核心修复：AIAgentChat的handleTechBrainTask直接调用executeTechService绕过HermesAgent",
+      "新增独立TechDemandChat.tsx组件：完整AI技术经理人对话框（政策问答/政策汇编/产业链分析/技术预测/双向匹配）",
+      "新增TechDemandChat.css样式文件：完整组件样式（含深色模式/响应式/加载动画）",
+      "错误处理增强：API未配置/超时/密钥无效/网络错误等返回具体原因而非'未知错误'",
+      "搜索服务兜底：搜索失败时自动回退到Mock模式并继续执行"
+    ]
+  },
+  {
+    "version": "v1.0.1",
+    "update_time": "2026-04-12 10:30:00",
+    "content": [
+      "整体界面重构为WiseMind AI设计风格",
+      "主题系统：浅色主题亮绿色(#00B42A)、深色主题亮蓝色(#4080FF)",
+      "可折叠侧边栏：6个导航分组、选中指示器动画、收起/展开按钮",
+      "顶部导航：核心标签页居中、主题切换按钮、更多下拉菜单",
+      "全局样式：卡片、按钮、输入框、进度条、滚动条，气泡消息等组件",
+      "修复HermesAgent初始化顺序导致的'Cannot set properties of undefined'错误",
+      "修复TypeScript未使用变量错误",
+      "修复技能上传功能文件格式验证问题",
+      "增加草稿箱页面(DraftBoxPage.tsx)",
+      "增加终端页面(TerminalPage.tsx)",
+      "保留全部原有功能：Hermes Agent、OpenClaw、Claude Code CLI、技能市场、API配置等"
+    ]
+  },
+  {
+    "version": "v1.0.2",
+    "update_time": "2026-04-12 16:21:16",
+    "content": [
+      "修复上传技术成果页面的JSON格式错误",
+      "优化成果标题和详情的输入校验逻辑，自动过滤特殊字符和转义JSON敏感字符",
+      "添加输入格式提示，引导用户规范填写内容",
+      "增强API调用失败的错误处理，区分网络异常/API配置错误/服务器错误等类型",
+      "统一界面风格为WiseMind AI设计，优化深色主题对比度",
+      "为内容区域添加滚动条支持",
+      "优化成果列表按时间倒序排列",
+      "修复TechPage组件未使用的Link导入",
+      "更新版本号至v1.0.2"
+    ]
+  },
+  {
+    "version": "v1.0.3",
+    "update_time": "2026-04-12 16:30:40",
+    "content": [
+      "优化需求页面界面：添加滚动条、优化选中状态、调整间距",
+      "修复文字对比度问题：统一使用themeColors确保深色/浅色主题可读性",
+      "修复JSON格式错误和API调用问题：优化parseJSONSafely和validateAPIResponse",
+      "优化分析报告组件：添加滚动支持、状态提示、更好的视觉反馈",
+      "优化需求列表组件：草稿/已完成分组显示、删除确认功能",
+      "修复DemandPage布局：左右栏滚动、选中高亮、响应式设计",
+      "更新版本号至v1.0.3"
+    ]
+  },
+  {
+    "version": "v1.0.4",
+    "update_time": "2026-04-12 16:42:18",
+    "content": [
+      "全局配色规范落地：统一所有页面使用themeColors主题变量",
+      "修复首页卡片硬编码颜色，改用themeColors.primaryLight",
+      "修复设置页面硬编码颜色，统一使用主题变量",
+      "修复面包屑导航硬编码颜色",
+      "修复API配置面板硬编码颜色(成功绿/错误红)",
+      "修复草稿箱页面硬编码颜色",
+      "修复智能匹配面板硬编码颜色",
+      "更新版本号至v1.0.4"
+    ]
+  },
+  {
+    "version": "v1.0.5",
+    "update_time": "2026-04-12 16:55:26",
+    "content": [
+      "将所有WiseMind文字改为AI赋能",
+      "修复侧边栏Logo区域文字显示",
+      "优化顶部导航栏样式一致性",
+      "更新设置页面版本号至v1.0.4"
+    ]
+  },
+  {
+    "version": "v1.0.6",
+    "update_time": "2026-04-12 18:45:00",
+    "content": [
+      "新增联网检索功能模块：搜索服务架构、Mock/Tavily搜索提供者",
+      "新增搜索配置存储(searchConfigStore)：支持多搜索提供商配置",
+      "新增企业背景调查工具(company-research)：联网检索企业新闻/专利/行业动态",
+      "修复HermesAgent工具名称规范化：下划线格式自动转换为短横线格式匹配",
+      "新增UTF-8编码规范化(normalizeEncoding)：修复技能文件乱码问题",
+      "新增模块专属按钮样式：需求管理(btn-demand-primary/secondary)、成果管理(btn-tech-primary)",
+      "完善CSS变量系统：添加:root浅色/深色主题变量定义",
+      "更新App.tsx应用CSS变量到document元素：实现动态主题切换",
+      "新增企业尽调报告UI组件(CompanyResearchReport)：展示企业信息/新闻/专利/行业动态",
+      "更新版本号至v1.0.6"
+    ]
+  },
+  {
+    "version": "v1.0.7",
+    "update_time": "2026-04-12 19:30:00",
+    "content": [
+      "重构AIAgentChat为统一对话容器：整合AI对话、Hermes任务规划、Claude终端三大功能",
+      "统一顶部功能标签切换：AI对话 / Hermes任务规划 / Claude终端",
+      "统一消息列表区域：支持普通AI消息、Hermes任务结果、终端输出混合展示",
+      "统一输入区域：适配不同功能模式的输入提示",
+      "新增Hermes快捷按钮：智能规划、深度研究、Claude Code一键触发",
+      "优化模型选择器：顶部标签栏集成模型切换下拉框",
+      "简化组件状态管理：移除冗余的chatStore依赖，统一使用本地消息状态"
+    ]
+  },
+  {
+    "version": "v1.0.8",
+    "update_time": "2026-04-12 20:00:00",
+    "content": [
+      "新增AI对话容器豆包风格CSS样式：.ai-chat-container、.chat-tabs、.chat-tab、.chat-content、.chat-input-area等",
+      "新增消息气泡样式：.message、.user-message、.ai-message、.hermes-message、.terminal-message",
+      "新增输入框样式：.chat-input、.send-btn",
+      "新增Hermes快捷按钮样式：.hermes-btns、.hermes-btn",
+      "更新AIAgentChat组件使用CSS类名：简化内联样式，使用统一CSS类",
+      "支持深色模式消息样式覆盖"
+    ]
+  },
+  {
+    "version": "v1.0.9",
+    "update_time": "2026-04-12 20:30:00",
+    "content": [
+      "优化textarea多行输入：支持Shift+Enter换行、Enter发送",
+      "实现输入框自动高度调整：minHeight=60px, maxHeight=120px",
+      "新增独立JS文件(public/ai-chat-standalone.js)：原生JS实现的AI对话面板逻辑",
+      "该JS文件完全适配HTML/CSS结构，包含：标签切换、消息发送、快捷按钮",
+      "修复Hermes工具名称格式：在模拟响应中统一使用短横线格式(claude-code等)",
+      "添加XSS防护：escapeHtml函数防止注入攻击",
+      "标注TODO注释清晰标注模拟代码位置，便于后续替换真实API/CLI调用"
+    ]
+  },
+  {
+    "version": "v1.1.0",
+    "update_time": "2026-04-12 21:30:00",
+    "content": [
+      "重构AIAgentChat多行输入：textarea设置rows={4} + minHeight:80px + maxHeight:160px + resize:vertical",
+      "严格区分Shift+Enter（换行）和Enter（发送）：handleKeyDown事件精准拦截",
+      "工具名称统一使用短横线格式：TOOL_IDS常量定义claude-code、task-planning、web-search等",
+      "Hermes-Agent作为唯一调度核心：Claude/OpenClaw/Skills全部经由Hermes统一分发",
+      "React状态不可变更新：setMessages(prev => [...prev, newMessage])规范写法",
+      "新增技能库快捷按钮(.skills-btns、.skills-btn)：代码审查、需求分析、方案生成、联网搜索",
+      "TypeScript类型强化：UnifiedMessage、ExecutionState、ChatMode等接口完整定义",
+      "修复stats.builtIn不存在问题：统一使用stats.native获取内置技能数量"
+    ]
+  },
+  {
+    "version": "v1.1.1",
+    "update_time": "2026-04-12 22:00:00",
+    "content": [
+      "修复正则表达式错误：escapeForJson使用new RegExp避免语法错误",
+      "新增TITLE_REGEX/CONTENT_REGEX校验正则：支持中文、英文、数字、常用符号",
+      "新增validateTitle/validateContent函数：替代sanitize移除方式，严格校验输入",
+      "修复API配置友好提示：getApiStatusInfo区分未配置/配置错误/已就绪三种状态",
+      "增强API异常捕获：getErrorMessage区分网络错误、API错误、配置错误、解析错误、超时",
+      "API未配置时显示具体错误原因（API Key未配置/API地址未配置/模型ID未配置）",
+      "API分析失败时显示具体失败原因，而非仅显示暂时不可用",
+      "UI优化：API已就绪时显示绿色成功提示，分析失败时显示详细错误信息"
+    ]
+  },
+  {
+    "version": "v1.1.2",
+    "update_time": "2026-04-12 22:30:00",
+    "content": [
+      "修复导航栏文字对比度问题：textHint从#999999/#B0B0B0升级至#717171/#c0c0c0，符合WCAG标准≥4.5:1",
+      "修复textSecondary和text颜色值：从#666666/#333333升级至#4a4a4a/#1a1a1a，提升深色主题可读性",
+      "新增导航增强CSS类：.sidebar-nav-item、.header-nav-item、.sidebar-nav-child等",
+      "侧边栏导航激活态：使用primaryLight背景+primary色文字+左侧3px指示器",
+      "侧边栏导航Hover态：使用surfaceHover背景+text色文字",
+      "顶部导航激活态：使用primary色文字+3px底部下划线",
+      "顶部导航Hover态：使用surfaceHover背景+text色文字",
+      "Header导航项：设置和技能按钮使用.header-nav-item统一样式",
+      "优化字体大小行高：导航项14px/1.5行高，子导航13px"
+    ]
+  },
+  {
+    "version": "v1.1.3",
+    "update_time": "2026-04-12 23:00:00",
+    "content": [
+      "HermesAgent新增normalizeToolName函数：规范化工具名称，空值校验+编码修复+下划线转短横线",
+      "skillManager导出normalizeEncoding函数：修复乱码问题，支持UTF-8/GBK双重解码检测",
+      "executeStep使用normalizeToolName替代直接replace，确保空值安全和编码兼容",
+      "错误消息显示规范化后的工具名称，与实际匹配逻辑一致"
+    ]
+  },
+  {
+    "version": "v1.1.6",
+    "update_time": "2026-04-13 11:00:00",
+    "content": [
+      "全局文字替换：将「AI赋能」「科创大脑AI智能体」统一修改为「AI技术经理人」",
+      "涉及文件：Sidebar.tsx、AIAgentChat.tsx、AIAgentChat.css、HermesAgent.ts、index.css、themeStore.ts",
+      "标签页名称更新：顶部导航「科创大脑」→「AI技术经理人」",
+      "Logo区域文字更新：「AI赋能」→「AI技术经理人」",
+      "提示信息更新：科创大脑分析中/融合政策库等描述更新为AI技术经理人"
+    ]
+  },
+  {
+    "version": "v1.1.5",
+    "update_time": "2026-04-13 10:30:00",
+    "content": [
+      "新增AIAgentChat.css样式文件：科技服务标签页/快捷按钮/科技消息气泡/结果卡片/匹配度指示器等完整样式",
+      "AIAgentChat.tsx引入CSS文件：科技服务界面样式完整导入",
+      "科技服务CSS支持深色模式适配和响应式布局",
+      "构建验证通过：npm run build 成功"
+    ]
+  },
+  {
+    "version": "v1.1.4",
+    "update_time": "2026-04-13 10:00:00",
+    "content": [
+      "科创大脑AI智能体：新增5大科技服务工具（政策问答/政策汇编/产业链分析/企业技术预测/成果需求双向匹配）",
+      "HermesAgent新增executeTool方法：支持科创大脑等直接工具调用场景",
+      "修复executeStep工具参数映射：webSearchTool/documentAnalysisTool/companyResearchTool正确传递query/document参数",
+      "AIAgentChat新增「科创大脑」模式：服务类型切换/深度思考开关/快捷提问/结构化结果展示",
+      "上传成果模块增强：3秒自动草稿/独立保存草稿按钮/字符计数/分类错误提示",
+      "新增TechUpload.css样式文件：对齐输入需求设计规范的表单样式",
+      "侧边栏导航重构：结构化navigationConfig配置/分组折叠/路由联动自动激活",
+      "App.tsx主题注入增强：data-theme属性动态设置/Object.entries批量注入CSS变量",
+      "类型定义补全：ApiConfig/TechResult/TeamMember/SkillAction/ErrorType等新增可选属性",
+      "index.css新增科创大脑样式：.tech-service-tabs/.tech-quick-btn/.tech-message等"
+    ]
+  }
+]

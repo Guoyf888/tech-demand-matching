@@ -1,6 +1,4 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Sidebar } from '@/components/layout/Sidebar';
+import { useState, useEffect } from 'react';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { TechUpload } from '@/components/tech/TechUpload';
 import { TechResultList } from '@/components/tech/TechResultList';
@@ -10,15 +8,33 @@ import { TechResult } from '@/types';
 import { themes, useThemeStore } from '@/store/themeStore';
 
 export function TechPage() {
-  const [results, setResults] = useState<TechResult[]>(() => techStorage.getAll());
+  const [results, setResults] = useState<TechResult[]>([]);
   const [selectedResult, setSelectedResult] = useState<TechResult | null>(null);
-  const { theme } = useThemeStore();
-  const currentTheme = theme === 'system' ? 'volcano-white' : theme;
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  const currentTheme = useThemeStore.getState().getEffectiveTheme();
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
 
+  // 初始化加载成果列表
+  useEffect(() => {
+    const storedResults = techStorage.getAll();
+    // 按时间倒序排列
+    const sortedResults = storedResults.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    setResults(sortedResults);
+    // 如果有成果，默认选中第一个
+    if (sortedResults.length > 0 && !selectedResult) {
+      setSelectedResult(sortedResults[0]);
+    }
+    setIsLoaded(true);
+  }, []);
+
   const handleUploaded = (result: TechResult) => {
-    const updated = results.filter((r) => r.id !== result.id);
-    setResults([...updated, result]);
+    setResults((prev) => {
+      const updated = prev.filter((r) => r.id !== result.id);
+      return [result, ...updated];
+    });
     setSelectedResult(result);
   };
 
@@ -26,12 +42,12 @@ export function TechPage() {
     <div className="flex flex-col h-full gap-4">
       <Breadcrumb />
       <div className="flex flex-1 overflow-hidden gap-4">
-        <Sidebar
-          activeMenu={selectedResult?.title || '上传成果'}
-          onMenuChange={() => {}}
-        />
         <div className="flex-1 flex gap-4 overflow-hidden">
-          <div className="w-80 flex flex-col gap-4 overflow-y-auto">
+          {/* 左侧：上传区和成果列表 */}
+          <div
+            className="w-80 flex-shrink-0 flex flex-col gap-4 overflow-y-auto"
+            style={{ minHeight: 0 }}
+          >
             <TechUpload onUploaded={handleUploaded} />
             <TechResultList
               results={results}
@@ -39,39 +55,29 @@ export function TechPage() {
               onSelect={setSelectedResult}
             />
           </div>
-          <div className="flex-1 overflow-y-auto">
+
+          {/* 右侧：成果详情 */}
+          <div
+            className="flex-1 overflow-hidden rounded-xl"
+            style={{
+              backgroundColor: themeColors?.surface,
+              border: `1px solid ${themeColors?.border}`,
+            }}
+          >
             {selectedResult ? (
-              <div
-                className="rounded-xl p-6 h-full"
-                style={{
-                  backgroundColor: themeColors?.surface,
-                  border: `1px solid ${themeColors?.border}`,
-                }}
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <Link
-                    to="/"
-                    className="px-3 py-1 rounded-lg text-sm transition-colors"
-                    style={{
-                      backgroundColor: themeColors?.surfaceHover,
-                      color: themeColors?.text,
-                    }}
-                  >
-                    ← 返回
-                  </Link>
-                </div>
+              <div className="h-full overflow-y-auto p-6">
                 <TechDetail result={selectedResult} />
               </div>
             ) : (
               <div
-                className="flex items-center justify-center h-full rounded-xl"
-                style={{
-                  backgroundColor: themeColors?.surface,
-                  border: `1px solid ${themeColors?.border}`,
-                  color: themeColors?.textSecondary,
-                }}
+                className="h-full flex flex-col items-center justify-center gap-4"
+                style={{ color: themeColors?.textHint }}
               >
-                选择一个技术成果查看详情
+                <span className="text-5xl">📋</span>
+                <p className="text-base">选择一个技术成果查看详情</p>
+                {isLoaded && results.length === 0 && (
+                  <p className="text-sm">上传第一个技术成果开始使用吧</p>
+                )}
               </div>
             )}
           </div>

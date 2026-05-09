@@ -1,36 +1,52 @@
 import { Link } from 'react-router-dom';
 import { RoleSwitcher } from '@/components/common/RoleSwitcher';
 import { useRoleStore } from '@/store/roleStore';
+import { themes, useThemeStore } from '@/store/themeStore';
 
 export function Header() {
   const { currentRole, setRole } = useRoleStore();
 
+  const currentTheme = useThemeStore.getState().getEffectiveTheme();
+  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+
   return (
-    <header className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
+    <header
+      className="shadow-sm"
+      style={{
+        backgroundColor: themeColors?.surface,
+        borderBottom: `1px solid ${themeColors?.border}`,
+      }}
+    >
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <Link
             to="/"
-            className="text-xl font-bold text-primary-600 hover:text-primary-700 flex items-center gap-2"
+            className="text-xl font-bold flex items-center gap-2 transition-all hover:scale-105"
+            style={{ color: themeColors?.primary, textDecoration: 'none' }}
           >
-            🏠 <span>技术需求对接</span>
+            <span>🏠</span>
+            <span style={{ color: themeColors?.text }}>技术需求对接</span>
           </Link>
           <RoleSwitcher currentRole={currentRole} onRoleChange={setRole} />
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           <Link
             to="/settings"
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="header-nav-item"
+            style={{ textDecoration: 'none' }}
             title="设置"
           >
-            ⚙️
+            <span style={{ fontSize: '18px' }}>⚙️</span>
+            <span className="ml-1">设置</span>
           </Link>
           <Link
             to="/skills"
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="header-nav-item"
+            style={{ textDecoration: 'none' }}
             title="技能市场"
           >
-            🔌
+            <span style={{ fontSize: '18px' }}>🔌</span>
+            <span className="ml-1">技能</span>
           </Link>
         </div>
       </div>

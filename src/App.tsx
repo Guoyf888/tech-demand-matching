@@ -1,34 +1,42 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { Header } from '@/components/layout/Header';
-import { TopMenu } from '@/components/layout/TopMenu';
-import { Footer } from '@/components/layout/Footer';
+import { AppSidebar } from '@/components/layout/AppSidebar';
 import { HomePage } from '@/pages/HomePage';
 import { DemandPage } from '@/pages/DemandPage';
 import { TechPage } from '@/pages/TechPage';
 import { PlatformPage } from '@/pages/PlatformPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { SkillsPage } from '@/pages/SkillsPage';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { AIAgentChat } from '@/components/agent/AIAgentChat';
+import { DraftBoxPage } from '@/pages/DraftBoxPage';
+import { TerminalPage } from '@/pages/TerminalPage';
+import { useThemeStore } from '@/store/themeStore';
 
 function App() {
   const { theme } = useThemeStore();
-  const currentTheme = theme === 'system' ? 'volcano-white' : theme;
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const isDark = theme === 'star-black' || theme === 'tech-blue';
 
   return (
     <BrowserRouter>
       <div
-        className="min-h-screen flex flex-col transition-colors duration-200"
+        className={`min-h-screen flex flex-col ${isDark ? 'dark' : ''}`}
         style={{
-          backgroundColor: themeColors?.background,
-          color: themeColors?.text,
+          backgroundColor: 'var(--color-bg-layout)',
+          color: 'var(--color-text-primary)',
         }}
       >
-        <TopMenu />
-        <Header />
-        <main className="flex-1 overflow-auto p-6" style={{ backgroundColor: themeColors?.background }}>
+        <AppSidebar />
+        <main
+          className="flex-1 overflow-hidden"
+          style={{
+            backgroundColor: 'var(--color-bg-layout)',
+            marginLeft: 'var(--sidebar-width, 220px)',
+            transition: 'margin-left 0.2s ease',
+            height: '100vh',
+          }}
+        >
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/ai" element={<AIAgentChat />} />
             <Route path="/demands" element={<DemandPage />} />
             <Route path="/reports" element={<DemandPage />} />
             <Route path="/results" element={<TechPage />} />
@@ -39,9 +47,10 @@ function App() {
             <Route path="/cooperations" element={<PlatformPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/skills" element={<SkillsPage />} />
+            <Route path="/drafts" element={<DraftBoxPage />} />
+            <Route path="/terminal" element={<TerminalPage />} />
           </Routes>
         </main>
-        <Footer />
       </div>
     </BrowserRouter>
   );

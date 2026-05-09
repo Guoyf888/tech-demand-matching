@@ -1,29 +1,223 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { demandStorage } from '@/services/storage/demandStorage';
 import { Demand } from '@/types';
 import { apiGateway } from '@/services/api/gateway';
+import { themes, useThemeStore } from '@/store/themeStore';
+import { parseDocument, detectContentType, extractIndustryTags, extractTechTags } from '@/services/documentParser';
+import { Upload, FileCheck } from 'lucide-react';
 
 interface DemandInputProps {
   onDemandCreated: (demand: Demand) => void;
+  draftToResume?: { title: string; content: string } | null;
+  onDraftResumed?: () => void;
 }
 
-export function DemandInput({ onDemandCreated }: DemandInputProps) {
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+/**
+ * 解析JSON字符串，处理可能存在的markdown包装或其他格式问题
+ */
+function parseJSONSafely(jsonString: string): Record<string, unknown> | null {
+  let cleaned = jsonString.trim();
+
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    cleaned = codeBlockMatch[1].trim();
+  }
+
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+
+  if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    try {
+      cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
+      cleaned = cleaned.replace(/'/g, '"');
+      cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+      return JSON.parse(cleaned);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function validateAPIResponse(data: unknown): { valid: boolean; content?: string; error?: string } {
+  if (!data || typeof data !== 'object') {
+    return { valid: false, error: 'API响应格式错误：响应不是有效的JSON对象' };
+  }
+
+  const response = data as Record<string, unknown>;
+
+  if (!Array.isArray(response.choices) || response.choices.length === 0) {
+    const errorObj = response.error as Record<string, unknown> | undefined;
+    const errorMsg = (errorObj?.message as string) || (errorObj?.type as string) || JSON.stringify(response.error).slice(0, 100);
+    return { valid: false, error: errorMsg ? `API错误: ${errorMsg}` : 'API响应格式错误：缺少choices字段或为空' };
+  }
+
+  const choice = response.choices[0] as Record<string, unknown>;
+
+  if (!choice.message || typeof choice.message !== 'object') {
+    return { valid: false, error: 'API响应格式错误：缺少message字段' };
+  }
+
+  const message = choice.message as Record<string, unknown>;
+
+  if (typeof message.content !== 'string') {
+    return { valid: false, error: 'API响应格式错误：message.content不是字符串' };
+  }
+
+  if (!message.content.trim()) {
+    return { valid: false, error: 'API返回的内容为空' };
+  }
+
+  return { valid: true, content: message.content };
+}
+
+export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: DemandInputProps) {
+  const [title, setTitle] = useState(draftToResume?.title || '');
+  const [content, setContent] = useState(draftToResume?.content || '');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [executionLog, setExecutionLog] = useState<string[]>([]);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 文档上传状态
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentLoading, setDocumentLoading] = useState(false);
+
+  const currentTheme = useThemeStore.getState().getEffectiveTheme();
+  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+
+  // 当draftToResume变化时，回填数据
+  useEffect(() => {
+    if (draftToResume) {
+      setTitle(draftToResume.title);
+      setContent(draftToResume.content);
+      if (onDraftResumed) {
+        onDraftResumed();
+      }
+    }
+  }, [draftToResume, onDraftResumed]);
+
+  // 自动保存草稿
+  const autoSaveDraft = useCallback(() => {
+    if (!title.trim() && !content.trim()) return;
+
+    const draft: Demand = {
+      id: `draft_${Date.now()}`,
+      title: title.trim() || '未命名需求',
+      content: content.trim(),
+      tags: [],
+      status: 'draft',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    demandStorage.save(draft);
+    setLastSaved(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+  }, [title, content]);
+
+  // 监听内容变化，触发自动保存
+  useEffect(() => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveDraft();
+    }, 2000);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [title, content, autoSaveDraft]);
+
+  // 手动保存草稿
+  const handleSaveDraft = () => {
+    if (!title.trim() && !content.trim()) {
+      setError('请先填写需求标题或详情');
+      return;
+    }
+
+    setIsSavingDraft(true);
+    autoSaveDraft();
+
+    setTimeout(() => {
+      setIsSavingDraft(false);
+      setLastSaved(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+    }, 500);
+  };
+
+  const addExecutionLog = (message: string) => {
+    setExecutionLog(prev => [...prev, `[${new Date().toLocaleTimeString('zh-CN')}] ${message}`]);
+  };
+
+  // 文档上传处理
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ['.docx', '.pdf'];
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!validTypes.includes(ext)) {
+      setError(`不支持的文件格式，仅支持 ${validTypes.join(', ')}`);
+      return;
+    }
+
+    setDocumentFile(file);
+    setDocumentLoading(true);
+    setError(null);
+
+    try {
+      const parsed = await parseDocument(file);
+      const contentType = detectContentType(parsed.text);
+      const industries = extractIndustryTags(parsed.text);
+      const techs = extractTechTags(parsed.text);
+
+      // 自动填充标题和内容
+      const extractedTitle = parsed.text.split('\n')[0]?.slice(0, 50) || file.name.replace(/\.[^.]+$/, '');
+      const extractedContent = parsed.text.slice(0, 2000);
+
+      setTitle(extractedTitle);
+      setContent(extractedContent);
+
+      // 显示识别结果
+      addExecutionLog(`📄 文档已解析: ${file.name}`);
+      addExecutionLog(`类型: ${contentType === 'demand' ? '技术需求' : contentType === 'result' ? '技术成果' : '待定'}`);
+      addExecutionLog(`行业标签: ${industries.join(', ') || '未识别'}`);
+      addExecutionLog(`技术领域: ${techs.join(', ') || '未识别'}`);
+      addExecutionLog(`内容已自动填充，请检查并补充后提交`);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : '解析失败';
+      setError(`文档解析失败: ${errorMsg}`);
+      setDocumentFile(null);
+    } finally {
+      setDocumentLoading(false);
+    }
+  };
 
   const handleSubmit = async () => {
-    if (!title.trim() || !content.trim()) return;
+    if (!title.trim() || !content.trim()) {
+      setError('请填写完整的标题和需求详情');
+      return;
+    }
 
     setError(null);
+    setExecutionLog([]);
 
     const demand: Demand = {
       id: demandStorage.generateId(),
-      title,
-      content,
+      title: title.trim(),
+      content: content.trim(),
       tags: [],
-      status: 'draft',
+      status: 'analyzing',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -34,103 +228,338 @@ export function DemandInput({ onDemandCreated }: DemandInputProps) {
     // 开始AI分析
     if (apiGateway.isConfigured()) {
       setIsAnalyzing(true);
+
       try {
+        addExecutionLog('开始分析需求...');
+
+        // 步骤1: 理解需求
+        addExecutionLog('正在理解需求内容...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // 步骤2: 选择技能
+        addExecutionLog('正在选择合适的分析技能...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // 步骤3: 执行分析
+        addExecutionLog('正在执行深度分析...');
         const response = await apiGateway.chat({
           messages: [
             {
               role: 'system',
               content: `你是一个技术需求分析助手。请分析以下技术需求：
-1. 提取关键词和标签
+1. 提取关键词和标签（最多5个）
 2. 分析需求的核心技术方向
 3. 给出简短的技术研发建议
 
-请以JSON格式返回：
-{
-  "tags": ["标签1", "标签2"],
-  "industryAnalysis": "行业分析...",
-  "techRoadmap": "技术路线...",
-  "suggestions": "创新建议..."
-}`,
+请直接返回JSON格式（不要使用markdown代码块），格式如下：
+{"tags": ["标签1", "标签2"], "industryAnalysis": "行业分析...", "techRoadmap": "技术路线...", "suggestions": "创新建议..."}`,
             },
-            { role: 'user', content },
+            { role: 'user', content: `需求标题：${title}\n\n需求详情：${content}` },
           ],
         });
 
+        addExecutionLog('正在处理分析结果...');
+
         const data = await response.json();
-        if (data.choices?.[0]?.message?.content) {
-          const analysis = JSON.parse(data.choices[0].message.content);
-          demand.tags = analysis.tags || [];
-          demand.analysis = {
-            enterpriseInfo: '基于您输入的需求分析',
-            industryAnalysis: analysis.industryAnalysis,
-            techRoadmap: analysis.techRoadmap,
-            suggestions: analysis.suggestions,
-          };
-          demand.status = 'completed';
-          demand.updatedAt = new Date().toISOString();
-          demandStorage.save(demand);
-          onDemandCreated(demand);
+        const validation = validateAPIResponse(data);
+        if (!validation.valid) {
+          throw new Error(validation.error);
         }
-      } catch (error: any) {
-        console.error('分析失败:', error);
-        setError(error.message || '分析失败，请检查API配置');
-        demand.status = 'completed';
+
+        const analysis = parseJSONSafely(validation.content!);
+        if (!analysis) {
+          throw new Error('AI返回的内容无法解析为JSON格式，请检查API响应或稍后重试');
+        }
+
+        // 步骤4: 生成报告
+        addExecutionLog('正在生成分析报告...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        demand.tags = Array.isArray(analysis.tags) ? analysis.tags.slice(0, 5) : [];
         demand.analysis = {
-          enterpriseInfo: 'API调用失败，请检查网络和API配置',
-          industryAnalysis: '请确保API Key配置正确且有足够的配额',
-          techRoadmap: '',
-          suggestions: '',
+          enterpriseInfo: '基于您输入的需求分析',
+          industryAnalysis: typeof analysis.industryAnalysis === 'string' ? analysis.industryAnalysis : '暂无行业分析',
+          techRoadmap: typeof analysis.techRoadmap === 'string' ? analysis.techRoadmap : '暂无技术路线',
+          suggestions: typeof analysis.suggestions === 'string' ? analysis.suggestions : '暂无建议',
         };
+        demand.status = 'completed';
+        demand.updatedAt = new Date().toISOString();
         demandStorage.save(demand);
         onDemandCreated(demand);
+
+        addExecutionLog('分析完成！');
+
+        // 清除日志
+        setTimeout(() => setExecutionLog([]), 3000);
+
+      } catch (error: unknown) {
+        console.error('分析失败:', error);
+
+        let friendlyError = '分析失败，请稍后重试';
+        const errorMsg = error instanceof Error ? error.message : String(error || '');
+
+        if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('网络连接失败')) {
+          friendlyError = '网络连接失败，请检查您的网络是否正常，或API地址是否可访问';
+        } else if (errorMsg.includes('API错误') || errorMsg.includes('API响应')) {
+          friendlyError = errorMsg;
+        } else if (errorMsg.includes('401') || errorMsg.includes('Unauthorized') || errorMsg.includes('密钥无效')) {
+          friendlyError = 'API密钥无效或已过期，请检查设置中的API Key配置';
+        } else if (errorMsg.includes('403') || errorMsg.includes('Forbidden') || errorMsg.includes('访问被拒绝')) {
+          friendlyError = 'API访问被拒绝，请检查API Key是否有权限';
+        } else if (errorMsg.includes('429') || errorMsg.includes('rate limit') || errorMsg.includes('频率超限')) {
+          friendlyError = 'API请求频率超限，请稍后重试';
+        } else if (errorMsg.includes('500') || errorMsg.includes('Internal Server Error') || errorMsg.includes('服务器错误')) {
+          friendlyError = 'API服务器内部错误，请稍后重试';
+        } else if (errorMsg.includes('超时') || errorMsg.includes('timeout')) {
+          friendlyError = 'API请求超时，请检查网络状况后重试';
+        } else if (errorMsg.includes('JSON') || errorMsg.includes('json') || errorMsg.includes('无法解析')) {
+          friendlyError = `AI返回数据解析失败，请稍后重试`;
+        } else if (errorMsg.includes('API未配置') || errorMsg.includes('API地址未配置') || errorMsg.includes('模型ID未配置')) {
+          friendlyError = errorMsg;
+        } else if (errorMsg.includes('不支持的 provider')) {
+          friendlyError = errorMsg;
+        } else {
+          friendlyError = `分析失败：${errorMsg.slice(0, 200)}`;
+        }
+
+        setError(friendlyError);
+        addExecutionLog(`分析失败: ${friendlyError}`);
+
+        demand.status = 'completed';
+        demand.analysis = {
+          enterpriseInfo: '分析过程中出现问题',
+          industryAnalysis: friendlyError,
+          techRoadmap: '',
+          suggestions: '请检查API配置或网络连接后重试',
+        };
+        demand.updatedAt = new Date().toISOString();
+        demandStorage.save(demand);
+        onDemandCreated(demand);
+
+        setTimeout(() => setExecutionLog([]), 5000);
       } finally {
         setIsAnalyzing(false);
       }
     } else {
-      setError('请先在设置中配置API Key');
+      const validation = apiGateway.validateConfig();
+      let configHint = validation.error || '请先在设置中配置API Key';
+
+      setError(configHint);
+
+      demand.status = 'completed';
+      demand.analysis = {
+        enterpriseInfo: '待配置API',
+        industryAnalysis: configHint,
+        techRoadmap: '请先在「系统设置」中完成API配置',
+        suggestions: '配置完成后即可使用AI分析功能',
+      };
+      demand.updatedAt = new Date().toISOString();
+      demandStorage.save(demand);
+      onDemandCreated(demand);
     }
   };
 
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-      <h3 className="text-lg font-semibold mb-4">输入技术需求</h3>
+  const contentLength = content.length;
+  const titleLength = title.length;
+  const isOverLimit = contentLength > 2000 || titleLength > 50;
 
+  return (
+    <div
+      className="rounded-xl p-5 flex flex-col gap-4"
+      style={{
+        backgroundColor: themeColors?.surface,
+        border: `1px solid ${themeColors?.border}`,
+      }}
+    >
+      <h3
+        className="text-lg font-semibold"
+        style={{ color: themeColors?.text }}
+      >
+        输入技术需求
+      </h3>
+
+      {/* Execution Log */}
+      {executionLog.length > 0 && (
+        <div
+          className="p-3 rounded-lg text-xs animate-fade-in"
+          style={{
+            backgroundColor: themeColors?.backgroundAlt || '#1E1E1E',
+            color: themeColors?.success || '#4ADE80',
+            fontFamily: 'monospace',
+            maxHeight: '120px',
+            overflowY: 'auto',
+          }}
+        >
+          {executionLog.map((log, i) => (
+            <div key={i} className="mb-1">{log}</div>
+          ))}
+        </div>
+      )}
+
+      {/* Error Display */}
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {error}
+        <div
+          className="p-3 rounded-lg text-sm animate-fade-in"
+          style={{
+            backgroundColor: themeColors?.error + '15',
+            border: `1px solid ${themeColors?.error}`,
+            color: themeColors?.error,
+          }}
+        >
+          <div className="font-medium mb-1">⚠️ {error.includes('网络') ? '网络异常' : error.includes('API') || error.includes('密钥') ? 'API错误' : '操作失败'}</div>
+          <div className="text-sm opacity-90">{error}</div>
         </div>
       )}
 
       <div className="space-y-4">
+        {/* 文档上传区域 */}
+        <div
+          className="border-2 border-dashed rounded-lg p-4 text-center transition-all"
+          style={{
+            borderColor: documentFile ? themeColors?.success : themeColors?.border,
+            backgroundColor: documentFile ? themeColors?.success + '08' : 'transparent',
+          }}
+        >
+          <input
+            type="file"
+            accept=".docx,.pdf"
+            onChange={handleDocumentUpload}
+            className="hidden"
+            id="doc-upload"
+            disabled={isAnalyzing || documentLoading}
+          />
+          <label
+            htmlFor="doc-upload"
+            className="flex flex-col items-center gap-2 cursor-pointer"
+          >
+            {documentLoading ? (
+              <>
+                <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
+                  style={{ borderColor: `${themeColors?.primary} transparent transparent transparent` }} />
+                <span className="text-sm" style={{ color: themeColors?.textSecondary }}>正在解析文档...</span>
+              </>
+            ) : documentFile ? (
+              <>
+                <FileCheck size={24} style={{ color: themeColors?.success }} />
+                <span className="text-sm font-medium" style={{ color: themeColors?.success }}>{documentFile.name}</span>
+                <span className="text-xs" style={{ color: themeColors?.textSecondary }}>文档已解析，内容已自动填充</span>
+              </>
+            ) : (
+              <>
+                <Upload size={24} style={{ color: themeColors?.textSecondary }} />
+                <span className="text-sm" style={{ color: themeColors?.textSecondary }}>点击上传WORD/PDF文档</span>
+                <span className="text-xs" style={{ color: themeColors?.textHint }}>支持自动识别需求内容、智能打标签</span>
+              </>
+            )}
+          </label>
+          {documentFile && (
+            <button
+              onClick={() => { setDocumentFile(null); }}
+              className="mt-2 text-xs px-2 py-1 rounded"
+              style={{ backgroundColor: themeColors?.error + '20', color: themeColors?.error }}
+            >
+              清除文档
+            </button>
+          )}
+        </div>
+
+        {/* Title Input */}
         <div>
-          <label className="block text-sm font-medium mb-2">需求标题</label>
+          <div className="flex items-center justify-between mb-2">
+            <label
+              className="text-sm font-medium"
+              style={{ color: themeColors?.text }}
+            >
+              需求标题
+            </label>
+            <span
+              className="text-xs"
+              style={{ color: titleLength > 50 ? themeColors?.error : themeColors?.textHint }}
+            >
+              {titleLength}/50
+            </span>
+          </div>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="例如：新能源汽车电池管理系统开发"
-            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
+            maxLength={50}
+            className="input"
+            style={{
+              backgroundColor: themeColors?.surface,
+              borderColor: isOverLimit && titleLength > 50 ? themeColors?.error : themeColors?.border,
+              color: themeColors?.text,
+            }}
           />
         </div>
 
+        {/* Content Input */}
         <div>
-          <label className="block text-sm font-medium mb-2">需求详情</label>
+          <div className="flex items-center justify-between mb-2">
+            <label
+              className="text-sm font-medium"
+              style={{ color: themeColors?.text }}
+            >
+              需求详情
+            </label>
+            <span
+              className="text-xs"
+              style={{ color: contentLength > 2000 ? themeColors?.error : themeColors?.textHint }}
+            >
+              {contentLength}/2000
+            </span>
+          </div>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="详细描述您的技术需求，包括技术指标、预期目标、预算范围等..."
-            rows={6}
-            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 resize-none dark:bg-gray-700 dark:border-gray-600"
+            placeholder={'请详细描述您的技术需求，包括：\n• 技术指标和性能要求\n• 预期目标和应用场景\n• 预算范围和时间要求\n• 已有技术基础和资源\n\n提示：越详细的需求描述可以获得更精准的分析结果。'}
+            rows={8}
+            maxLength={2000}
+            className="input resize-none"
+            style={{
+              backgroundColor: themeColors?.surface,
+              borderColor: isOverLimit && contentLength > 2000 ? themeColors?.error : themeColors?.border,
+              color: themeColors?.text,
+            }}
           />
+          <p
+            className="text-xs mt-1.5"
+            style={{ color: themeColors?.textHint }}
+          >
+            请详细描述技术需求，越具体分析越精准。支持中英文输入。
+          </p>
         </div>
 
-        <button
-          onClick={handleSubmit}
-          disabled={!title.trim() || !content.trim() || isAnalyzing}
-          className="w-full px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isAnalyzing ? '分析中...' : '提交分析'}
-        </button>
+        {/* Auto-save indicator */}
+        {lastSaved && !isAnalyzing && (
+          <div
+            className="flex items-center gap-1.5 text-xs animate-fade-in"
+            style={{ color: themeColors?.success }}
+          >
+            <span>✓</span>
+            <span>草稿已保存 · {lastSaved}</span>
+          </div>
+        )}
+
+        {/* Buttons */}
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={handleSaveDraft}
+            disabled={isAnalyzing || (!title.trim() && !content.trim())}
+            className="btn-demand-secondary flex-1"
+          >
+            {isSavingDraft ? '保存中...' : '💾 保存草稿'}
+          </button>
+
+          <button
+            onClick={handleSubmit}
+            disabled={!title.trim() || !content.trim() || isAnalyzing || isOverLimit}
+            className="btn-demand-primary flex-1"
+          >
+            {isAnalyzing ? '⏳ 分析中...' : '🚀 提交分析'}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -3,10 +3,10 @@ import { themes, useThemeStore } from '@/store/themeStore';
 
 export function Footer() {
   const { configs, activeProvider } = useApiStore();
-  const { theme } = useThemeStore();
+  
   const currentConfig = configs[activeProvider];
 
-  const currentTheme = theme === 'system' ? 'volcano-white' : theme;
+  const currentTheme = useThemeStore.getState().getEffectiveTheme();
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
 
   return (

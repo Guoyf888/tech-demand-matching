@@ -1,0 +1,70 @@
+.about-settings-container {
+  padding: 16px 0;
+}
+
+.about-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.version-form {
+  padding: 20px;
+}
+
+.form-item {
+  margin-bottom: 16px;
+}
+
+.form-item label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.version-input,
+.version-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.version-input:focus,
+.version-textarea:focus {
+  border-color: var(--color-primary, #0ea5e9);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.version-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.readonly-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.save-btn {
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.save-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.about-hint {
+  margin-top: 12px;
+  font-size: 12px;
+}
