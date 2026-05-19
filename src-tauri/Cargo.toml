@@ -1,6 +1,6 @@
 [package]
 name = "tech-demand-matching"
-version = "1.8.0"
+version = "1.9.0"
 description = "技术需求智能对接系统"
 authors = ["Guoyf888"]
 edition = "2021"

@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-05-19
+
+### Fixed
+
+- **主题切换不响应** - 6+组件从`useThemeStore.getState()`改为hook订阅，切换主题实时生效
+- **自动保存重复创建草稿** - DemandInput使用稳定draftId，避免每次保存生成新草稿
+- **分析失败标记为成功** - 需求分析失败时status改为`'failed'`而非`'completed'`
+- **匹配超时机制失效** - gateway.chat()支持AbortSignal参数，超时可真正中断请求
+- **TavilySearchProvider空URL崩溃** - 添加URL有效性检查，无效URL使用默认值
+- **SearchService硬编码年份** - 企业调研和行业分析查询改为动态年份
+- **MatchPanel无错误处理** - 匹配过程添加catch块，失败时显示反馈
+- **gateway错误类型安全** - catch块从`any`改为`unknown`+类型守卫
+- **versionConfig崩溃** - JSON.parse添加try-catch保护
+- **apiStore.clear()误清除** - 改为只移除自身key，不影响其他store
+- **encryptedStorage栈溢出** - 大数据编码改用`apply`避免spread溢出
+
+### Added
+
+- **消息Markdown渲染** - MessageItem支持粗体、列表、标题、代码块、分割线渲染
+- **文档内容发送** - 上传的Word/PDF文档内容自动拼接到AI对话消息中
+- **ErrorBoundary** - 全局错误边界，组件崩溃显示友好错误页而非白屏
+- **404路由** - 未匹配路径显示404页面，引导返回首页
+- **转化路径交互** - TechDetail转化路径卡片添加onClick提示和键盘无障碍支持
+- **应用图标** - favicon从Vite默认logo替换为应用图标
+
+### Changed
+
+- **Vite构建优化** - 新增docs分包(jszip/mammoth/pdf-parse独立chunk)
+- **代码清理** - 删除dead code(TOOL_IDS常量、重复ApiConfig类型)
+- **版本号统一升级至v1.9.0** - package.json / tauri.conf.json / Cargo.toml 同步更新
+
 ## [1.8.0] - 2026-05-18
 
 ### Added

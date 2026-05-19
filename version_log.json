@@ -1,5 +1,26 @@
 [
   {
+    "version": "v1.9.0",
+    "update_time": "2026-05-19 10:00:00",
+    "content": [
+      "全面查漏补缺：修复6+组件主题切换不响应（改用Zustand hook订阅）",
+      "修复需求自动保存重复创建草稿（稳定draftId）",
+      "修复分析失败标记为completed（改为failed状态）",
+      "消息渲染支持Markdown（粗体/列表/标题/代码块/分割线）",
+      "修复文档上传内容未发送给AI（拼接到消息中并清除状态）",
+      "修复匹配超时机制失效（gateway支持AbortSignal参数）",
+      "修复TavilySearchProvider空URL崩溃、SearchService硬编码年份",
+      "新增ErrorBoundary全局错误边界，新增404路由",
+      "修复favicon引用应用图标，修复encryptedStorage栈溢出风险",
+      "修复apiStore/searchConfigStore.clear()误清除全部localStorage",
+      "gateway.ts错误类型从any改为unknown，versionConfig添加JSON.parse保护",
+      "TechDetail转化路径添加onClick交互和键盘无障碍支持",
+      "Vite构建优化：docs分包(jszip/mammoth/pdf-parse)独立加载",
+      "清理dead code：TOOL_IDS常量、重复ApiConfig类型定义",
+      "版本号统一升级至v1.9.0"
+    ]
+  },
+  {
     "version": "v1.8.0",
     "update_time": "2026-05-18 18:00:00",
     "content": [

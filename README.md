@@ -2,7 +2,7 @@
 
 > **TechMatch AI** — 基于 AI Agent 架构的科技成果转化智能匹配平台
 
-[![Version](https://img.shields.io/badge/version-v1.8.0-blue)]()
+[![Version](https://img.shields.io/badge/version-v1.9.0-blue)]()
 [![Tauri](https://img.shields.io/badge/Tauri-v2.x-FFC131)]()
 [![React](https://img.shields.io/badge/React-18-61DAFB)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6)]()
@@ -85,11 +85,13 @@ npm run build
 ```
 src/
 ├── main.tsx                    # 入口文件
-├── App.tsx                     # 主应用（路由、布局、主题）
+├── App.tsx                     # 主应用（路由、布局、主题、ErrorBoundary）
 ├── components/
 │   ├── agent/                  # AI 对话组件
 │   │   ├── AIAgentChat.tsx     # 统一对话容器（4 种模式）
-│   │   └── MessageItem.tsx     # 消息气泡组件
+│   │   └── MessageItem.tsx     # 消息气泡（支持 Markdown 渲染）
+│   ├── common/                 # 通用组件
+│   │   └── ErrorBoundary.tsx   # 全局错误边界
 │   ├── demand/                 # 需求管理
 │   │   ├── DemandInput.tsx     # 需求输入表单
 │   │   └── AnalysisReport.tsx  # AI 分析报告
@@ -103,17 +105,18 @@ src/
 │   │   └── ApiConfigPanel.tsx  # API 配置面板
 │   └── ...
 ├── services/
-│   ├── api/                    # API 网关（多 Provider 统一调用）
-│   ├── matching.ts             # 匹配算法
+│   ├── api/                    # API 网关（12 Provider 统一调用，支持 AbortSignal）
+│   ├── hermes/                 # Hermes Agent 任务规划系统
+│   ├── matching.ts             # 匹配算法（并发 + 超时）
 │   ├── documentParser.ts       # 文档解析（Word/PDF）
 │   └── search/                 # 联网搜索
-├── store/                      # Zustand 状态管理
-│   ├── apiStore.ts             # API 配置（加密存储）
-│   └── searchConfigStore.ts    # 搜索配置
+├── store/                      # Zustand 状态管理（加密持久化）
+├── types/                      # TypeScript 类型定义
 ├── config/                     # 版本、模型配置
 └── utils/                      # 工具函数
-    └── encryptedStorage.ts     # 加密存储工具
+    └── encryptedStorage.ts     # XOR + Base64 加密存储
 src-tauri/                      # Tauri Rust 后端
+public/                         # 静态资源
 ```
 
 ## 安全特性
@@ -122,11 +125,14 @@ src-tauri/                      # Tauri Rust 后端
 - **文件上传校验** — 10MB 大小限制 + magic bytes 二进制验证
 - **Prompt 注入防护** — 用户输入过滤和截断，防止恶意指令注入
 - **AI 输出校验** — 返回结果 Schema 校验，拒绝异常数据
+- **全局错误边界** — ErrorBoundary 防止组件崩溃导致白屏
+- **请求超时保护** — 匹配评估支持 AbortSignal，30 秒超时自动中断
 
 ## 版本历史
 
 | 版本 | 日期 | 主要更新 |
 |------|------|----------|
+| v1.9.0 | 2026-05-19 | 全面查漏补缺：22项Bug修复、ErrorBoundary、Markdown渲染、AbortSignal超时 |
 | v1.8.0 | 2026-05-18 | 新增 MiMo/SenseNova 大模型、侧边栏扩展、结构化需求标签、匹配面板重构 |
 | v1.7.0 | 2026-05-18 | 安全加固（API 加密、文件校验、注入防护）、性能优化（懒加载、并发匹配） |
 | v1.6.0 | 2026-04-30 | 优化 AI 对话界面，简化模式切换 |
