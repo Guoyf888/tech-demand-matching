@@ -21,8 +21,12 @@ const INIT_VERSION: VersionInfo = {
 export const useVersionConfig = () => {
   // 从本地存储加载版本信息（持久化）
   const [versionInfo, setVersionInfo] = useState<VersionInfo>(() => {
-    const saved = localStorage.getItem('systemVersion');
-    return saved ? JSON.parse(saved) : INIT_VERSION;
+    try {
+      const saved = localStorage.getItem('systemVersion');
+      return saved ? JSON.parse(saved) : INIT_VERSION;
+    } catch {
+      return INIT_VERSION;
+    }
   });
 
   // 更新版本信息（供设置页调用）

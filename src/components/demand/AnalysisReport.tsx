@@ -7,7 +7,7 @@ interface AnalysisReportProps {
 }
 
 export function AnalysisReport({ demand }: AnalysisReportProps) {
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
+  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
   const contentRef = useRef<HTMLDivElement>(null);
 

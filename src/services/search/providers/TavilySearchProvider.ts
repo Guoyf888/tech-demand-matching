@@ -78,12 +78,12 @@ export class TavilySearchProvider implements ISearchProvider {
 
       return {
         success: true,
-        results: (data.results || []).map((item: any) => ({
+        results: (data.results || []).map((item: { title?: string; url?: string; content?: string; description?: string; published_date?: string }) => ({
           title: item.title || '无标题',
           url: item.url || '',
           snippet: item.content || item.description || '',
           publishedAt: item.published_date,
-          source: new URL(item.url).hostname.replace('www.', ''),
+          source: item.url ? new URL(item.url).hostname.replace('www.', '') : 'unknown',
         })),
         provider: 'tavily',
         query,

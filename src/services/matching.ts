@@ -75,7 +75,7 @@ ${sanitizeForPrompt(tech.content)}
         },
         { role: 'user', content: '请评估匹配度' },
       ],
-    });
+    }, controller.signal);
 
     clearTimeout(timeout);
 

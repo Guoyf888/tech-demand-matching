@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { useThemeStore } from '@/store/themeStore';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 const HomePage = lazy(() => import('@/pages/HomePage').then(m => ({ default: m.HomePage })));
 const AIAgentChat = lazy(() => import('@/components/agent/AIAgentChat').then(m => ({ default: m.AIAgentChat })));
@@ -17,6 +18,22 @@ function PageLoader() {
   return (
     <div className="flex items-center justify-center h-full">
       <div className="animate-pulse text-sm" style={{ color: 'var(--color-text-tertiary)' }}>加载中...</div>
+    </div>
+  );
+}
+
+function NotFoundPage() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
+      <div className="text-5xl" style={{ color: 'var(--color-text-tertiary)' }}>404</div>
+      <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>页面不存在</p>
+      <a
+        href="/"
+        className="px-4 py-2 rounded-lg text-sm text-white no-underline"
+        style={{ backgroundColor: 'var(--color-primary, #1677FF)' }}
+      >
+        返回首页
+      </a>
     </div>
   );
 }
@@ -44,6 +61,7 @@ function App() {
             height: '100vh',
           }}
         >
+          <ErrorBoundary>
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<HomePage />} />
@@ -60,8 +78,10 @@ function App() {
               <Route path="/skills" element={<SkillsPage />} />
               <Route path="/drafts" element={<DraftBoxPage />} />
               <Route path="/terminal" element={<TerminalPage />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     </BrowserRouter>

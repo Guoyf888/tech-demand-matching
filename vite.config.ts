@@ -24,6 +24,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           icons: ['lucide-react'],
+          docs: ['jszip', 'mammoth', 'pdf-parse'],
         },
       },
     },

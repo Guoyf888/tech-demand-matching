@@ -23,7 +23,7 @@ const obfuscatedStorage: Storage = {
     localStorage.removeItem(key);
   },
   get length() { return localStorage.length; },
-  clear(): void { localStorage.clear(); },
+  clear(): void { localStorage.removeItem(STORAGE_KEY); },
   key(index: number): string | null { return localStorage.key(index); },
 };
 

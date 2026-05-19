@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { demandStorage } from '@/services/storage/demandStorage';
 import { Demand } from '@/types';
 import { apiGateway } from '@/services/api/gateway';
@@ -95,7 +95,10 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
+  // 稳定的草稿ID，避免每次autoSave创建新草稿
+  const draftId = useMemo(() => `draft_${Date.now()}`, []);
+
+  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
 
   // 当draftToResume变化时，回填数据
@@ -114,7 +117,7 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
     if (!title.trim() && !content.trim()) return;
 
     const draft: Demand = {
-      id: `draft_${Date.now()}`,
+      id: draftId,
       title: title.trim() || '未命名需求',
       content: content.trim(),
       tags: [],
@@ -125,7 +128,7 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
 
     demandStorage.save(draft);
     setLastSaved(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
-  }, [title, content]);
+  }, [title, content, draftId]);
 
   // 监听内容变化，触发自动保存
   useEffect(() => {
@@ -340,7 +343,7 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
         setError(friendlyError);
         addExecutionLog(`分析失败: ${friendlyError}`);
 
-        demand.status = 'completed';
+        demand.status = 'failed';
         demand.analysis = {
           enterpriseInfo: '分析过程中出现问题',
           industryAnalysis: friendlyError,
@@ -361,7 +364,7 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
 
       setError(configHint);
 
-      demand.status = 'completed';
+      demand.status = 'failed';
       demand.analysis = {
         enterpriseInfo: '待配置API',
         industryAnalysis: configHint,

@@ -15,7 +15,8 @@ function xorEncode(input: string): string {
   }
 
   // Encode as Base64 with a marker prefix to distinguish from plaintext
-  return 'ENC:' + btoa(String.fromCharCode(...output));
+  // Use apply to avoid spread operator stack overflow on large data
+  return 'ENC:' + btoa(String.fromCharCode.apply(null, Array.from(output)));
 }
 
 function xorDecode(encoded: string): string {

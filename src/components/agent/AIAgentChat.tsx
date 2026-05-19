@@ -44,24 +44,6 @@ interface UnifiedMessage {
 
 // ==================== 常量 ====================
 
-// 工具名称常量 - 全部使用短横线格式（无下划线）
-// 注意：HermesAgent内部已实现自动规范化（_转-），此处仅供类型参考
-const TOOL_IDS = {
-  CLAUDE_CODE: 'claude-code',
-  TASK_PLANNING: 'task-planning',
-  WEB_SEARCH: 'web-search',
-  DOCUMENT_ANALYSIS: 'document-analysis',
-  OPENCLAW_SKILL: 'openclaw-skill',
-  NATIVE_SKILL: 'native-skill',
-  COMPANY_RESEARCH: 'company-research',
-  POLICY_QA: 'policy-qa',
-  POLICY_COMPILATION: 'policy-compilation',
-  INDUSTRY_CHAIN: 'industry-chain-analysis',
-  TECH_PREDICTION: 'enterprise-tech-prediction',
-  RESULT_MATCHING: 'result-demand-matching',
-} as const;
-void TOOL_IDS; // 避免TS报错，实际使用HermesAgent统一调度
-
 const modelOptions = [
   { id: 'openai', name: 'OpenAI GPT-4' },
   { id: 'claude', name: 'Claude 3.5' },
@@ -111,7 +93,7 @@ export function AIAgentChat() {
   const terminalInputRef = useRef<HTMLInputElement>(null);
 
   const { activeProvider, setActiveProvider } = useApiStore();
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
+  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
 
   const stats = unifiedSkillService.getStats();
@@ -210,17 +192,25 @@ export function AIAgentChat() {
   const handleSend = async () => {
     if (!input.trim() || isLoading || agentLoading) return;
 
+    // 拼接文档内容到用户消息
+    let fullInput = input;
+    if (documentPreview) {
+      fullInput = `${input}\n\n---\n📎 附件内容（${documentPreview.type}）：\n${documentPreview.text.slice(0, 3000)}`;
+    }
+
     if (mode === 'hermes') {
-      addUnifiedMessage('user', input);
-      await handleHermesTask(input);
+      addUnifiedMessage('user', fullInput);
+      await handleHermesTask(fullInput);
     } else if (mode === 'chat') {
-      addUnifiedMessage('user', input);
-      await handleAIChat(input);
+      addUnifiedMessage('user', fullInput);
+      await handleAIChat(fullInput);
     } else if (mode === 'smart-agent') {
-      await handleSmartAgentTask(input);
+      await handleSmartAgentTask(fullInput);
     }
 
     setInput('');
+    setDocumentFile(null);
+    setDocumentPreview(null);
     // 重置textarea高度
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';

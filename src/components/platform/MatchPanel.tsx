@@ -53,7 +53,7 @@ export function MatchPanel() {
   const [filterMinScore, setFilterMinScore] = useState(0);
   const [showFilter, setShowFilter] = useState(false);
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
+  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
 
   // 加载统计
@@ -82,6 +82,11 @@ export function MatchPanel() {
       setHasRun(true);
       setDemandCount(demands.filter(d => d.status === 'completed').length);
       setTechCount(techResults.filter(t => t.status === 'completed').length);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '匹配过程出现未知错误';
+      console.error('匹配失败:', msg);
+      setMatches([]);
+      setHasRun(true);
     } finally {
       clearInterval(progressTimer);
       setIsMatching(false);

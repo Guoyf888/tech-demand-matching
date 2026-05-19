@@ -129,7 +129,7 @@ class SearchService {
   private async manualResearch(companyName: string): Promise<CompanyResearchResult> {
     const [news, industry] = await Promise.all([
       this.search({
-        query: `${companyName} 最新动态 新闻 2024`,
+        query: `${companyName} 最新动态 新闻 ${new Date().getFullYear()}`,
         numResults: 5,
         searchType: 'news',
       }),
@@ -162,7 +162,7 @@ class SearchService {
    */
   async searchIndustry(industryName: string): Promise<SearchResponse> {
     return this.search({
-      query: `${industryName} 行业动态 市场分析 技术趋势 2024`,
+      query: `${industryName} 行业动态 市场分析 技术趋势 ${new Date().getFullYear()}`,
       numResults: 10,
     });
   }

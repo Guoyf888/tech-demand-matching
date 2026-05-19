@@ -53,7 +53,7 @@ function RingProgress({ value, size = 64, strokeWidth = 5, color }: { value: num
 
 // TRL阶梯指示器
 function TRLIndicator({ level }: { level: number }) {
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
+  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
 
   return (
@@ -73,7 +73,7 @@ function TRLIndicator({ level }: { level: number }) {
 }
 
 export function TechDetail({ result }: TechDetailProps) {
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
+  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
 
   // 从内容中提取指标
@@ -283,6 +283,10 @@ export function TechDetail({ result }: TechDetailProps) {
                 style={{
                   backgroundColor: themeColors?.surfaceHover,
                 }}
+                onClick={() => alert(`建议路径：${path.label}\n${path.desc}\n\n请联系成果方进一步沟通合作事宜。`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') alert(`建议路径：${path.label}\n${path.desc}`); }}
               >
                 <span className="text-xl block mb-1">{path.icon}</span>
                 <span className="text-xs font-medium block" style={{ color: themeColors?.text }}>{path.label}</span>

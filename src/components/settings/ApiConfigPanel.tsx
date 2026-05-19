@@ -30,7 +30,7 @@ export function ApiConfigPanel() {
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
+  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
 
   const selectedProvider = providers.find(p => p.id === activeProvider);

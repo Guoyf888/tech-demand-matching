@@ -1,20 +1,5 @@
 // 修复：补全类型定义，增加可选属性+默认值，避免运行时报错
 
-export interface ApiConfig {
-  apiKey: string;
-  endpoint?: string;
-  model?: string;
-  temperature?: number;
-  timeout?: number;
-  enabled: boolean;
-}
-
-export interface ProviderConfig {
-  name: string;
-  label: string;
-  config: ApiConfig;
-}
-
 export interface Demand {
   id: string;
   title: string;

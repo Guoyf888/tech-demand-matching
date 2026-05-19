@@ -189,7 +189,7 @@ export class ApiGateway {
     return { valid: true };
   }
 
-  async chat(options: ChatCompletionOptions): Promise<Response> {
+  async chat(options: ChatCompletionOptions, signal?: AbortSignal): Promise<Response> {
     // 验证配置
     const configValidation = this.validateConfig();
     if (!configValidation.valid) {
@@ -212,6 +212,7 @@ export class ApiGateway {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
+        signal,
       });
 
       // 处理HTTP错误
@@ -257,9 +258,9 @@ export class ApiGateway {
       }
 
       return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // 处理网络错误
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      if (error instanceof TypeError && error.message.includes('fetch')) {
         throw new Error(`网络连接失败，请检查：\n1. 您的网络是否正常\n2. API地址(${baseUrl})是否可访问\n3. 是否需要代理`);
       }
 
