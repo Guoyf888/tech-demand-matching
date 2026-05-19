@@ -4,7 +4,28 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { encodeData, decodeData } from '@/utils/encryptedStorage';
+
+const STORAGE_KEY = 'search-config-storage';
+
+const obfuscatedStorage: Storage = {
+  getItem(key: string): string | null {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const decoded = decodeData(raw);
+    return decoded || raw;
+  },
+  setItem(key: string, value: string): void {
+    localStorage.setItem(key, encodeData(value));
+  },
+  removeItem(key: string): void {
+    localStorage.removeItem(key);
+  },
+  get length() { return localStorage.length; },
+  clear(): void { localStorage.clear(); },
+  key(index: number): string | null { return localStorage.key(index); },
+};
 
 // 搜索提供商配置
 export interface SearchProviderConfig {
@@ -83,7 +104,8 @@ export const useSearchConfigStore = create<SearchConfigState>()(
       },
     }),
     {
-      name: 'search-config-storage',
+      name: STORAGE_KEY,
+      storage: createJSONStorage(() => obfuscatedStorage),
     }
   )
 );

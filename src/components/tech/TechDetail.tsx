@@ -6,9 +6,82 @@ interface TechDetailProps {
   result: TechResult;
 }
 
+// 从内容中提取数值指标
+function extractMetric(text: string, patterns: RegExp[]): number | null {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const val = parseInt(match[1], 10);
+      if (!isNaN(val) && val >= 0 && val <= 100) return val;
+    }
+  }
+  return null;
+}
+
+// 环形进度条组件
+function RingProgress({ value, size = 64, strokeWidth = 5, color }: { value: number; size?: number; strokeWidth?: number; color: string }) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (value / 100) * circumference;
+
+  return (
+    <svg width={size} height={size} className="transform -rotate-90">
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        className="text-gray-200 dark:text-gray-700"
+        style={{ stroke: 'var(--color-border, #e5e7eb)' }}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+// TRL阶梯指示器
+function TRLIndicator({ level }: { level: number }) {
+  const currentTheme = useThemeStore.getState().getEffectiveTheme();
+  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+
+  return (
+    <div className="flex gap-0.5">
+      {Array.from({ length: 9 }, (_, i) => (
+        <div
+          key={i}
+          className="w-3 h-6 rounded-sm transition-colors"
+          style={{
+            backgroundColor: i < level ? themeColors?.primary : themeColors?.border,
+            opacity: i < level ? 1 : 0.4,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function TechDetail({ result }: TechDetailProps) {
   const currentTheme = useThemeStore.getState().getEffectiveTheme();
   const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+
+  // 从内容中提取指标
+  const fullText = `${result.content || ''} ${result.summary || ''}`;
+  const innovationScore = extractMetric(fullText, [/创新[性度]?[评得]?[分]?[：:为]?\s*(\d+)/i, /innovation[:\s]*(\d+)/i]);
+  const marketScore = extractMetric(fullText, [/市场[价]?[值]?[评得]?[分]?[：:为]?\s*(\d+)/i, /market[:\s]*(\d+)/i]);
+  const trlMatch = fullText.match(/TRL[\s-]*(\d)/i) || fullText.match(/成熟度[：:为]?\s*(\d)/i);
+  const trlLevel = trlMatch ? parseInt(trlMatch[1], 10) : null;
 
   return (
     <div className="space-y-4 overflow-y-auto" style={{ maxHeight: '100%' }}>
@@ -48,6 +121,86 @@ export function TechDetail({ result }: TechDetailProps) {
           </span>
         </div>
       </div>
+
+      {/* 分析概览卡片 */}
+      {result.status === 'completed' && (
+        <div className="grid grid-cols-3 gap-3">
+          {/* 创新性评分 */}
+          <div
+            className="rounded-xl p-4 flex flex-col items-center gap-2"
+            style={{
+              backgroundColor: themeColors?.surface,
+              border: `1px solid ${themeColors?.border}`,
+            }}
+          >
+            <span className="text-xs font-medium" style={{ color: themeColors?.textSecondary }}>创新性</span>
+            {innovationScore !== null ? (
+              <div className="relative flex items-center justify-center">
+                <RingProgress value={innovationScore} color={themeColors?.primary || '#1677FF'} />
+                <span className="absolute text-sm font-bold" style={{ color: themeColors?.primary }}>{innovationScore}</span>
+              </div>
+            ) : (
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: themeColors?.border + '40' }}
+              >
+                <span className="text-xs" style={{ color: themeColors?.textHint }}>待分析</span>
+              </div>
+            )}
+            <span className="text-[10px]" style={{ color: themeColors?.textHint }}>0-100分</span>
+          </div>
+
+          {/* 技术成熟度 */}
+          <div
+            className="rounded-xl p-4 flex flex-col items-center gap-2"
+            style={{
+              backgroundColor: themeColors?.surface,
+              border: `1px solid ${themeColors?.border}`,
+            }}
+          >
+            <span className="text-xs font-medium" style={{ color: themeColors?.textSecondary }}>技术成熟度</span>
+            {trlLevel !== null ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xl font-bold" style={{ color: themeColors?.primary }}>TRL {trlLevel}</span>
+                </div>
+                <TRLIndicator level={trlLevel} />
+              </>
+            ) : (
+              <>
+                <span className="text-xl font-bold" style={{ color: themeColors?.textHint }}>--</span>
+                <TRLIndicator level={0} />
+              </>
+            )}
+            <span className="text-[10px]" style={{ color: themeColors?.textHint }}>1-9级</span>
+          </div>
+
+          {/* 市场价值 */}
+          <div
+            className="rounded-xl p-4 flex flex-col items-center gap-2"
+            style={{
+              backgroundColor: themeColors?.surface,
+              border: `1px solid ${themeColors?.border}`,
+            }}
+          >
+            <span className="text-xs font-medium" style={{ color: themeColors?.textSecondary }}>市场价值</span>
+            {marketScore !== null ? (
+              <div className="relative flex items-center justify-center">
+                <RingProgress value={marketScore} color={themeColors?.success || '#4ADE80'} />
+                <span className="absolute text-sm font-bold" style={{ color: themeColors?.success }}>{marketScore}</span>
+              </div>
+            ) : (
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: themeColors?.border + '40' }}
+              >
+                <span className="text-xs" style={{ color: themeColors?.textHint }}>待分析</span>
+              </div>
+            )}
+            <span className="text-[10px]" style={{ color: themeColors?.textHint }}>0-100分</span>
+          </div>
+        </div>
+      )}
 
       {/* 成果概要 */}
       {result.summary && (
@@ -101,6 +254,44 @@ export function TechDetail({ result }: TechDetailProps) {
           {result.content}
         </p>
       </div>
+
+      {/* 建议转化路径 */}
+      {result.status === 'completed' && (
+        <div
+          className="rounded-xl p-5"
+          style={{
+            backgroundColor: themeColors?.surface,
+            border: `1px solid ${themeColors?.border}`,
+          }}
+        >
+          <h4
+            className="font-semibold mb-3 flex items-center gap-2"
+            style={{ color: themeColors?.text }}
+          >
+            <span>🔄</span>
+            <span>建议转化路径</span>
+          </h4>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: '技术转让', icon: '📋', desc: '一次性技术成果转让' },
+              { label: '许可授权', icon: '📜', desc: '许可使用获取持续收益' },
+              { label: '合作研发', icon: '🤝', desc: '联合开发深度合作' },
+            ].map(path => (
+              <div
+                key={path.label}
+                className="p-3 rounded-lg text-center cursor-pointer transition-all hover:scale-[0.98]"
+                style={{
+                  backgroundColor: themeColors?.surfaceHover,
+                }}
+              >
+                <span className="text-xl block mb-1">{path.icon}</span>
+                <span className="text-xs font-medium block" style={{ color: themeColors?.text }}>{path.label}</span>
+                <span className="text-[10px] block mt-0.5" style={{ color: themeColors?.textHint }}>{path.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 技术标签 */}
       {result.tags.length > 0 && (

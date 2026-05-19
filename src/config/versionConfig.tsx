@@ -12,9 +12,9 @@ export interface VersionInfo {
 
 // 初始版本信息
 const INIT_VERSION: VersionInfo = {
-  version: 'v1.2.6',
-  updateTime: '2026-04-13',
-  description: '初始版本：实现核心导航和AI对话功能'
+  version: 'v1.8.0',
+  updateTime: '2026-05-18',
+  description: '功能增强：新增小米MiMo/商汤日日新大模型接入，优化需求挖掘/成果分析/智能匹配界面'
 };
 
 // 全局版本配置Hook

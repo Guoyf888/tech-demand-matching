@@ -1,4 +1,4 @@
-export type Provider = 'openai' | 'claude' | 'gemini' | 'ernie' | 'qwen' | 'zhipu' | 'minimax' | 'kimi' | 'openrouter' | 'custom';
+export type Provider = 'openai' | 'claude' | 'gemini' | 'ernie' | 'qwen' | 'zhipu' | 'minimax' | 'kimi' | 'openrouter' | 'custom' | 'mimo' | 'sensenova';
 
 export interface ModelConfig {
   id: string;

@@ -12,6 +12,8 @@ const providers: { id: Provider; name: string; placeholder: string; baseUrl?: st
   { id: 'zhipu', name: '智谱GLM', placeholder: 'API Key', baseUrl: 'https://open.bigmodel.cn' },
   { id: 'minimax', name: 'MiniMax', placeholder: 'API Key', baseUrl: 'https://api.minimax.chat' },
   { id: 'kimi', name: 'Kimi', placeholder: 'API Key', baseUrl: 'https://api.moonshot.cn' },
+  { id: 'mimo', name: '小米MiMo', placeholder: 'API Key', baseUrl: 'https://api.xiaomi.com' },
+  { id: 'sensenova', name: '商汤日日新', placeholder: 'API Key', baseUrl: 'https://api.sensenova.cn' },
   { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...', baseUrl: 'https://openrouter.ai' },
   { id: 'custom', name: '自定义', placeholder: 'API Key' },
 ];
@@ -160,7 +162,7 @@ export function ApiConfigPanel() {
         >
           选择模型提供商
         </label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {providers.map((p) => (
             <button
               key={p.id}
@@ -273,6 +275,8 @@ export function ApiConfigPanel() {
             activeProvider === 'zhipu' ? 'glm-4' :
             activeProvider === 'minimax' ? 'abab6-chat' :
             activeProvider === 'kimi' ? 'moonshot-v1-8k' :
+            activeProvider === 'mimo' ? 'MiMo-7B' :
+            activeProvider === 'sensenova' ? 'SenseChat-5' :
             '模型ID'
           }
           className="input"

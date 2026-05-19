@@ -20,6 +20,7 @@ import {
   Target, Users, GitBranch, Cpu
 } from 'lucide-react';
 import { parseDocument, detectContentType, extractIndustryTags, extractTechTags } from '@/services/documentParser';
+import { MessageItem } from './MessageItem';
 import './AIAgentChat.css';
 
 // ==================== 类型定义 ====================
@@ -132,9 +133,9 @@ export function AIAgentChat() {
     setTerminalLines(prev => [...prev, { type, content }]);
   }, []);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -785,26 +786,9 @@ ${demandSkill.content}
               </div>
             )}
 
-            {messages.map((msg) => {
-              const messageClass = msg.type === 'user' ? 'user-message' :
-                msg.type === 'ai' ? 'ai-message' :
-                  msg.type === 'hermes-plan' || msg.type === 'hermes-result' ? 'hermes-message' :
-                    msg.type === 'terminal' ? 'terminal-message' : 'ai-message';
-
-              return (
-                <div key={msg.id} className={`message ${messageClass} animate-fade-in`}>
-                  <div className="text-sm whitespace-pre-wrap" style={{ wordBreak: 'break-word' }}>
-                    {msg.content}
-                  </div>
-                  <div
-                    className="text-xs mt-2"
-                    style={{ color: msg.type === 'user' ? 'rgba(255,255,255,0.7)' : themeColors?.textSecondary }}
-                  >
-                    {new Date(msg.timestamp).toLocaleTimeString()}
-                  </div>
-                </div>
-              );
-            })}
+            {messages.map((msg) => (
+              <MessageItem key={msg.id} message={msg} themeColors={themeColors} />
+            ))}
 
             {isLoading && (
               <div className="ai-message animate-pulse">
@@ -942,25 +926,9 @@ ${demandSkill.content}
                 </div>
               )}
 
-              {messages.map((msg) => {
-                const messageClass = msg.type === 'user' ? 'user-message' :
-                  msg.type === 'tech-result' ? 'tech-message' :
-                    msg.type === 'system' ? 'system-message' : 'ai-message';
-
-                return (
-                  <div key={msg.id} className={`message ${messageClass} animate-fade-in`}>
-                    <div className="text-sm whitespace-pre-wrap" style={{ wordBreak: 'break-word' }}>
-                      {msg.content}
-                    </div>
-                    <div
-                      className="text-xs mt-2"
-                      style={{ color: msg.type === 'user' ? 'rgba(255,255,255,0.7)' : themeColors?.textSecondary }}
-                    >
-                      {new Date(msg.timestamp).toLocaleTimeString()}
-                    </div>
-                  </div>
-                );
-              })}
+              {messages.map((msg) => (
+                <MessageItem key={msg.id} message={msg} themeColors={themeColors} />
+              ))}
 
               {agentLoading && (
                 <div className="ai-message animate-pulse">

@@ -21,6 +21,10 @@ import {
   Moon,
   Bot,
   Cog,
+  Store,
+  Award,
+  Users,
+  Puzzle,
 } from 'lucide-react';
 import { useThemeStore } from '@/store/themeStore';
 import './AppSidebar.css';
@@ -53,6 +57,12 @@ const NAV_ITEMS: NavItem[] = [
         path: '/demands',
       },
       {
+        id: 'demand-square',
+        label: '需求广场',
+        icon: <Store size={16} strokeWidth={1.75} />,
+        path: '/demand-square',
+      },
+      {
         id: 'reports',
         label: '分析报告',
         icon: <FileText size={16} strokeWidth={1.75} />,
@@ -73,9 +83,15 @@ const NAV_ITEMS: NavItem[] = [
         path: '/results',
       },
       {
+        id: 'tech-square',
+        label: '成果广场',
+        icon: <Award size={16} strokeWidth={1.75} />,
+        path: '/tech-square',
+      },
+      {
         id: 'team',
         label: '团队展示',
-        icon: <Lightbulb size={16} strokeWidth={1.75} />,
+        icon: <Users size={16} strokeWidth={1.75} />,
         path: '/team',
       },
     ],
@@ -85,6 +101,18 @@ const NAV_ITEMS: NavItem[] = [
     label: '智能匹配',
     icon: <Handshake size={20} strokeWidth={1.75} />,
     path: '/matching',
+  },
+  {
+    id: 'cooperations',
+    label: '合作管理',
+    icon: <Users size={20} strokeWidth={1.75} />,
+    path: '/cooperations',
+  },
+  {
+    id: 'skills',
+    label: '技能市场',
+    icon: <Puzzle size={20} strokeWidth={1.75} />,
+    path: '/skills',
   },
   {
     id: 'settings',

@@ -1,5 +1,38 @@
 [
   {
+    "version": "v1.8.0",
+    "update_time": "2026-05-18 18:00:00",
+    "content": [
+      "新增大模型接入：小米MiMo（OpenAI兼容格式，baseUrl: api.xiaomi.com）",
+      "新增大模型接入：商汤日日新SenseNova（OpenAI兼容格式，baseUrl: api.sensenova.cn）",
+      "设置面板优化：模型提供商从9个扩展到11个，网格布局从3列改为4列",
+      "侧边栏导航扩展：新增需求广场、成果广场、合作管理、技能市场导航入口",
+      "技术需求挖掘优化：新增结构化维度标签（预算范围/时间要求/合作方式），自动注入需求上下文",
+      "分析报告增强：行业分析增加热度进度条，技术路线增加里程碑步骤，创新建议增加优先级标签",
+      "科技成果分析优化：新增分析概览卡片（创新性环形图/TRL成熟度阶梯/市场价值环形图）",
+      "成果详情增强：新增建议转化路径区块（技术转让/许可授权/合作研发三种路径）",
+      "智能匹配面板全面重构：顶部统计卡片、匹配进度条、分数筛选器、匹配等级标签",
+      "匹配结果增强：共同关键词展示、建议合作方式、多维度对比卡片",
+      "版本号统一升级至v1.8.0"
+    ]
+  },
+  {
+    "version": "v1.7.0",
+    "update_time": "2026-05-18 12:00:00",
+    "content": [
+      "安全加固：API Key存储加密（XOR+Base64编码），不再明文保存localStorage",
+      "安全加固：文件上传新增10MB大小限制+magic bytes二进制校验",
+      "安全加固：Tavily API Key改用Authorization Header传输",
+      "安全加固：Prompt注入防护+AI输出Schema校验",
+      "性能优化：路由级代码分割（React.lazy+Suspense懒加载全部9个页面）",
+      "性能优化：mammoth/pdf-parse大依赖改为动态import()按需加载",
+      "性能优化：AIAgentChat提取memo化MessageItem子组件，减少重渲染",
+      "性能优化：匹配算法从串行改为5并发+关键词预过滤+30s超时",
+      "构建优化：Vite新增manualChunks分离vendor/icons，target设为esnext",
+      "项目治理：.gitignore补全（排除393MB子项目目录），删除空目录，dev-only日志控制"
+    ]
+  },
+  {
     "version": "v1.6.0",
     "update_time": "2026-04-30 16:00:00",
     "content": [

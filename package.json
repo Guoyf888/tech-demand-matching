@@ -1,7 +1,7 @@
 {
   "name": "tech-demand-matching",
   "private": true,
-  "version": "1.61.0",
+  "version": "1.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

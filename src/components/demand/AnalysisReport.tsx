@@ -87,6 +87,22 @@ export function AnalysisReport({ demand }: AnalysisReportProps) {
             <span>📊</span>
             <span>行业分析</span>
           </h4>
+          {/* 行业热度指示条 */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs" style={{ color: themeColors?.textHint }}>行业关注度</span>
+              <span className="text-xs font-medium" style={{ color: themeColors?.primary }}>高</span>
+            </div>
+            <div className="w-full h-1.5 rounded-full" style={{ backgroundColor: themeColors?.border }}>
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: '78%',
+                  background: `linear-gradient(90deg, ${themeColors?.primary}80, ${themeColors?.primary})`,
+                }}
+              />
+            </div>
+          </div>
           <p
             className="whitespace-pre-wrap text-sm leading-relaxed"
             style={{ color: themeColors?.textSecondary }}
@@ -112,6 +128,34 @@ export function AnalysisReport({ demand }: AnalysisReportProps) {
             <span>🛤️</span>
             <span>技术研发路线</span>
           </h4>
+          {/* 里程碑步骤 */}
+          <div className="mb-3 flex items-center gap-1">
+            {['需求确认', '方案设计', '原型开发', '测试验证', '落地部署'].map((step, i) => (
+              <div key={step} className="flex items-center gap-1">
+                <div
+                  className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold"
+                  style={{
+                    backgroundColor: i < 3 ? themeColors?.primary : themeColors?.border,
+                    color: i < 3 ? '#fff' : themeColors?.textHint,
+                  }}
+                >
+                  {i + 1}
+                </div>
+                <span
+                  className="text-[10px]"
+                  style={{ color: i < 3 ? themeColors?.primary : themeColors?.textHint }}
+                >
+                  {step}
+                </span>
+                {i < 4 && (
+                  <div
+                    className="w-3 h-px"
+                    style={{ backgroundColor: i < 2 ? themeColors?.primary : themeColors?.border }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
           <p
             className="whitespace-pre-wrap text-sm leading-relaxed"
             style={{ color: themeColors?.textSecondary }}
@@ -137,11 +181,34 @@ export function AnalysisReport({ demand }: AnalysisReportProps) {
             <span>💡</span>
             <span>创新建议</span>
           </h4>
+          {/* 优先级标签 */}
+          <div className="flex gap-2 mb-3">
+            {[
+              { label: '技术可行性', color: themeColors?.success },
+              { label: '市场前景', color: themeColors?.primary },
+              { label: '创新度', color: themeColors?.warning },
+            ].map(item => (
+              <span
+                key={item.label}
+                className="px-2 py-0.5 rounded text-[10px] font-medium"
+                style={{
+                  backgroundColor: item.color + '18',
+                  color: item.color,
+                }}
+              >
+                {item.label}
+              </span>
+            ))}
+          </div>
           <p
             className="whitespace-pre-wrap text-sm leading-relaxed"
             style={{ color: themeColors?.textSecondary }}
           >
-            {demand.analysis.suggestions}
+            {typeof demand.analysis.suggestions === 'string'
+              ? demand.analysis.suggestions
+              : Array.isArray(demand.analysis.suggestions)
+                ? demand.analysis.suggestions.join('\n')
+                : String(demand.analysis.suggestions)}
           </p>
         </div>
       )}

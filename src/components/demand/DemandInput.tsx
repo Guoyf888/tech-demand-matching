@@ -86,6 +86,11 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
   const [executionLog, setExecutionLog] = useState<string[]>([]);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 结构化标签
+  const [selectedBudget, setSelectedBudget] = useState<string>('');
+  const [selectedTimeline, setSelectedTimeline] = useState<string>('');
+  const [selectedCooperation, setSelectedCooperation] = useState<string>('');
+
   // 文档上传状态
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
@@ -212,10 +217,20 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
     setError(null);
     setExecutionLog([]);
 
+    // 构建结构化内容
+    let structuredContent = content.trim();
+    const metaLines: string[] = [];
+    if (selectedBudget) metaLines.push(`预算范围：${selectedBudget}`);
+    if (selectedTimeline) metaLines.push(`时间要求：${selectedTimeline}`);
+    if (selectedCooperation) metaLines.push(`合作方式：${selectedCooperation}`);
+    if (metaLines.length > 0) {
+      structuredContent = `[${metaLines.join('；')}]\n${structuredContent}`;
+    }
+
     const demand: Demand = {
       id: demandStorage.generateId(),
       title: title.trim(),
-      content: content.trim(),
+      content: structuredContent,
       tags: [],
       status: 'analyzing',
       createdAt: new Date().toISOString(),
@@ -492,6 +507,82 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
               color: themeColors?.text,
             }}
           />
+        </div>
+
+        {/* 结构化标签 */}
+        <div className="space-y-3">
+          <label
+            className="text-sm font-medium"
+            style={{ color: themeColors?.text }}
+          >
+            需求维度（可选）
+          </label>
+
+          {/* 预算范围 */}
+          <div>
+            <span className="text-xs mb-1.5 block" style={{ color: themeColors?.textHint }}>预算范围</span>
+            <div className="flex flex-wrap gap-1.5">
+              {['50万以下', '50-200万', '200-500万', '500万以上'].map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setSelectedBudget(selectedBudget === opt ? '' : opt)}
+                  className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: selectedBudget === opt ? themeColors?.primary + '20' : themeColors?.surfaceHover,
+                    color: selectedBudget === opt ? themeColors?.primary : themeColors?.textSecondary,
+                    border: `1px solid ${selectedBudget === opt ? themeColors?.primary + '40' : 'transparent'}`,
+                  }}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 时间要求 */}
+          <div>
+            <span className="text-xs mb-1.5 block" style={{ color: themeColors?.textHint }}>时间要求</span>
+            <div className="flex flex-wrap gap-1.5">
+              {['3个月以内', '6个月以内', '1年以内', '不限'].map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setSelectedTimeline(selectedTimeline === opt ? '' : opt)}
+                  className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: selectedTimeline === opt ? themeColors?.primary + '20' : themeColors?.surfaceHover,
+                    color: selectedTimeline === opt ? themeColors?.primary : themeColors?.textSecondary,
+                    border: `1px solid ${selectedTimeline === opt ? themeColors?.primary + '40' : 'transparent'}`,
+                  }}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 合作方式 */}
+          <div>
+            <span className="text-xs mb-1.5 block" style={{ color: themeColors?.textHint }}>合作方式</span>
+            <div className="flex flex-wrap gap-1.5">
+              {['技术转让', '技术许可', '合作研发', '技术咨询'].map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setSelectedCooperation(selectedCooperation === opt ? '' : opt)}
+                  className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: selectedCooperation === opt ? themeColors?.primary + '20' : themeColors?.surfaceHover,
+                    color: selectedCooperation === opt ? themeColors?.primary : themeColors?.textSecondary,
+                    border: `1px solid ${selectedCooperation === opt ? themeColors?.primary + '40' : 'transparent'}`,
+                  }}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Content Input */}

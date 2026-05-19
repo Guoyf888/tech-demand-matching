@@ -8,6 +8,8 @@ dist/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
@@ -18,3 +20,15 @@ Thumbs.db
 
 # Tauri
 src-tauri/target/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.local
+
+# Bundled sub-projects (reference source, not part of the app)
+claude-code-source-main/
+hermes-agent-main/
+openclaw-main/
+src-tauri/claude-code/

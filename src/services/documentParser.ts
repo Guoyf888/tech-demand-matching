@@ -1,8 +1,40 @@
 /**
  * 文档解析服务 - 支持 WORD (.docx) 和 PDF 文件
  */
-import mammoth from 'mammoth';
-import { PDFParse } from 'pdf-parse';
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+// Magic bytes for file type validation
+const MAGIC_BYTES = {
+  docx: [0x50, 0x4B, 0x03, 0x04], // PK\x03\x04 (ZIP format, used by DOCX)
+  pdf: [0x25, 0x50, 0x44, 0x46],  // %PDF
+};
+
+function validateFileSize(file: File): void {
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`文件过大（${(file.size / 1024 / 1024).toFixed(1)}MB），最大允许 10MB`);
+  }
+  if (file.size === 0) {
+    throw new Error('文件为空');
+  }
+}
+
+async function validateMagicBytes(file: File, expectedType: 'docx' | 'pdf'): Promise<void> {
+  const header = file.slice(0, 4);
+  const buffer = await header.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const expected = MAGIC_BYTES[expectedType];
+
+  for (let i = 0; i < expected.length; i++) {
+    if (bytes[i] !== expected[i]) {
+      throw new Error(
+        expectedType === 'docx'
+          ? '文件格式无效：不是有效的 .docx 文件'
+          : '文件格式无效：不是有效的 .pdf 文件'
+      );
+    }
+  }
+}
 
 export interface ParsedDocument {
   text: string;
@@ -15,6 +47,11 @@ export interface ParsedDocument {
  * 解析DOCX文件
  */
 async function parseDocx(file: File): Promise<string> {
+  validateFileSize(file);
+  await validateMagicBytes(file, 'docx');
+
+  const mammoth = (await import('mammoth')).default;
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -35,6 +72,11 @@ async function parseDocx(file: File): Promise<string> {
  * 解析PDF文件
  */
 async function parsePdf(file: File): Promise<string> {
+  validateFileSize(file);
+  await validateMagicBytes(file, 'pdf');
+
+  const { PDFParse } = await import('pdf-parse');
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {

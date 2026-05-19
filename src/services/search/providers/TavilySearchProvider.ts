@@ -51,9 +51,9 @@ export class TavilySearchProvider implements ISearchProvider {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.getApiKey()}`,
         },
         body: JSON.stringify({
-          api_key: this.getApiKey(),
           query,
           search_depth: searchType === 'news' ? 'basic' : 'advanced',
           max_results: numResults,

@@ -17,7 +17,7 @@ export class ApiGateway {
     }
 
     // Otherwise find the first provider that has a complete config
-    const providers: Provider[] = ['minimax', 'openai', 'claude', 'qwen', 'ernie', 'zhipu', 'kimi', 'openrouter', 'gemini', 'custom'];
+    const providers: Provider[] = ['minimax', 'openai', 'claude', 'qwen', 'ernie', 'zhipu', 'kimi', 'openrouter', 'gemini', 'custom', 'mimo', 'sensenova'];
     for (const provider of providers) {
       const config = configs[provider];
       if (config && config.apiKey && config.baseUrl && config.modelId) {
@@ -48,7 +48,7 @@ export class ApiGateway {
     }
 
     // Find first configured provider
-    const providers: Provider[] = ['minimax', 'openai', 'claude', 'qwen', 'ernie', 'zhipu', 'kimi', 'openrouter', 'gemini', 'custom'];
+    const providers: Provider[] = ['minimax', 'openai', 'claude', 'qwen', 'ernie', 'zhipu', 'kimi', 'openrouter', 'gemini', 'custom', 'mimo', 'sensenova'];
     for (const provider of providers) {
       const config = configs[provider];
       if (config && config.apiKey && config.baseUrl && config.modelId) {
@@ -135,6 +135,16 @@ export class ApiGateway {
         headers['Authorization'] = `Bearer ${apiKey}`;
         break;
 
+      case 'mimo':
+        endpoint = `${baseUrl}/v1/chat/completions`;
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        break;
+
+      case 'sensenova':
+        endpoint = `${baseUrl}/v1/chat/completions`;
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        break;
+
       default:
         throw new Error(`不支持的 provider: ${provider}`);
     }
@@ -194,7 +204,9 @@ export class ApiGateway {
       const { endpoint, headers, body } = this.buildRequest(provider, apiKey, baseUrl, modelId, options);
 
       // 记录请求日志（调试用）
-      console.log(`[API请求] ${provider} -> ${endpoint}`);
+      if (import.meta.env.DEV) {
+        console.log(`[API请求] ${provider} -> ${endpoint}`);
+      }
 
       const response = await fetch(endpoint, {
         method: 'POST',
