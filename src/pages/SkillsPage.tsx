@@ -5,6 +5,7 @@ import { Skill } from '@/types';
 import { themes, useThemeStore } from '@/store/themeStore';
 import { importSkillsFromZip, skillStorage } from '@/services/hermes/skillManager';
 import { getOpenClawService } from '@/services/openclaw/OpenClawService';
+import { getHermesSkillsService } from '@/services/hermes/HermesSkillsService';
 import { parseSkillFile, validateSkillFile, generateSampleSkillFile } from '@/services/skills/SkillFileParser';
 
 /**
@@ -86,9 +87,16 @@ export function SkillsPage() {
     const builtIn = getBuiltInSkills();
     const custom = skillStorage.getAll();
     const openClaw = getOpenClawService().getAllSkills();
+    const hermes = getHermesSkillsService().getAllSkills();
     const allSkills = [...builtIn];
 
     for (const skill of openClaw) {
+      if (!allSkills.find(s => s.name === skill.name)) {
+        allSkills.push(skill);
+      }
+    }
+
+    for (const skill of hermes) {
       if (!allSkills.find(s => s.name === skill.name)) {
         allSkills.push(skill);
       }
@@ -367,19 +375,17 @@ export function SkillsPage() {
   };
 
   const groupedSkills = {
-    '内置技能': skills.filter(s => s.isBuiltIn && ['内置', '分析类', '工具类', '资源类'].includes(s.group || '')),
-    '分析类': skills.filter(s => ['find-skills', 'summarize', 'deep-research', '数据分析'].includes(s.name)),
-    '开发工具': skills.filter(s => ['Skill Creator', '代码助手', '智能搜索', 'coding-agent', 'github'].includes(s.name)),
+    '内置技能': skills.filter(s => s.isBuiltIn),
+    'Hermes': skills.filter(s => s.source === 'hermes'),
     'OpenClaw': skills.filter(s => s.source === 'openclaw'),
+    '自定义': skills.filter(s => !s.isBuiltIn && s.source !== 'hermes' && s.source !== 'openclaw'),
   };
 
-  const groups = ['全部', '内置', '自定义', ...new Set(skills.filter((s) => s.group && !['内置', '自定义'].includes(s.group)).map((s) => s.group!))];
+  const groups = ['全部', '内置技能', 'Hermes', 'OpenClaw', '自定义'];
 
   const filteredSkills = selectedGroup === '全部'
     ? skills
-    : selectedGroup === '自定义'
-      ? skills.filter((s) => !s.isBuiltIn && !s.group)
-      : skills.filter((s) => s.group === selectedGroup);
+    : groupedSkills[selectedGroup as keyof typeof groupedSkills] || [];
 
   const sortedSkills = [...filteredSkills].sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;

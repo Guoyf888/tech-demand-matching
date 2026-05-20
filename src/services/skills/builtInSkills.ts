@@ -137,6 +137,8 @@ You are a research analyst specializing in technology and innovation. Perform de
       usageCount: 0,
       successRate: 0,
     },
+    group: '内置',
+    isBuiltIn: true,
   },
   {
     id: 'skill_document',
@@ -151,6 +153,8 @@ You are a research analyst specializing in technology and innovation. Perform de
       usageCount: 0,
       successRate: 0,
     },
+    group: '内置',
+    isBuiltIn: true,
   },
   {
     id: 'skill_code',
@@ -165,6 +169,8 @@ You are a research analyst specializing in technology and innovation. Perform de
       usageCount: 0,
       successRate: 0,
     },
+    group: '内置',
+    isBuiltIn: true,
     content: `# Code Assistant Skill
 
 You are an expert software engineer. Help with code-related tasks including review, generation, and explanation.
@@ -195,6 +201,8 @@ You are an expert software engineer. Help with code-related tasks including revi
       usageCount: 0,
       successRate: 0,
     },
+    group: '内置',
+    isBuiltIn: true,
     content: `# Data Analysis Skill
 
 You are a data analyst specializing in technology and business metrics. Analyze data and provide actionable insights.
@@ -227,6 +235,8 @@ You are a data analyst specializing in technology and business metrics. Analyze 
       usageCount: 0,
       successRate: 0,
     },
+    group: '内置',
+    isBuiltIn: true,
   },
 ];
 

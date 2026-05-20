@@ -84,7 +84,7 @@ export function TechDetail({ result }: TechDetailProps) {
   const trlLevel = trlMatch ? parseInt(trlMatch[1], 10) : null;
 
   return (
-    <div className="space-y-4 overflow-y-auto" style={{ maxHeight: '100%' }}>
+    <div className="h-full overflow-y-auto p-6 space-y-4">
       {/* 标题区域 */}
       <div className="pb-4" style={{ borderBottom: `1px solid ${themeColors?.border}` }}>
         <h2

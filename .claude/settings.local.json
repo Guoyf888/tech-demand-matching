@@ -2,7 +2,35 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:wisemindai.app)"
+      "WebFetch(domain:wisemindai.app)",
+      "Bash(npx tsc *)",
+      "Bash(npx vite *)",
+      "Bash(rustup show *)",
+      "Read(//mingw64/bin/**)",
+      "Read(//c/msys64/mingw64/bin/**)",
+      "Read(//c/mingw64/bin/**)",
+      "Bash(rustup target *)",
+      "Bash(export PATH=\"/c/msys64/mingw64/bin:$PATH\")",
+      "Bash(python3 *)",
+      "Bash(python *)",
+      "Bash(where python.exe)",
+      "Bash(/c/Users/34457/AppData/Local/Programs/Python/Launcher/py -c ' *)",
+      "Bash(node *)",
+      "Bash(npm list *)",
+      "WebSearch",
+      "WebFetch(domain:docs.sensenova.cn)",
+      "WebFetch(domain:sensenova.cn)",
+      "Bash(find /c/mingw* -name \"windres*\")",
+      "Read(//c/Program Files/**)",
+      "Bash(rustup toolchain *)",
+      "Read(//c/msys64/usr/bin/**)",
+      "Read(//c/msys2/usr/bin/**)",
+      "Bash(pacman --version)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/2022/BuildTools/VC/Auxiliary/Build/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }

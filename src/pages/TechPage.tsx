@@ -39,10 +39,23 @@ export function TechPage() {
   };
 
   return (
-    <div className="flex flex-col h-full gap-4">
+    <div className="flex flex-col h-full gap-4" style={{ minHeight: 0 }}>
       <Breadcrumb />
-      <div className="flex flex-1 overflow-hidden gap-4">
-        <div className="flex-1 flex gap-4 overflow-hidden">
+      {/* 成果统计概览 */}
+      <div className="flex gap-3 flex-shrink-0">
+        {[
+          { label: '全部成果', count: results.length, color: themeColors?.primary },
+          { label: '已分析', count: results.filter(r => r.status === 'completed').length, color: themeColors?.success },
+          { label: '分析中', count: results.filter(r => r.status !== 'completed').length, color: themeColors?.warning },
+        ].map(item => (
+          <div key={item.label} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs" style={{ backgroundColor: item.color + '15', color: item.color }}>
+            <span className="font-bold text-sm">{item.count}</span>
+            <span>{item.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-1 overflow-hidden gap-4" style={{ minHeight: 0 }}>
+        <div className="flex-1 flex gap-4 overflow-hidden" style={{ minHeight: 0 }}>
           {/* 左侧：上传区和成果列表 */}
           <div
             className="w-80 flex-shrink-0 flex flex-col gap-4 overflow-y-auto"
@@ -62,12 +75,11 @@ export function TechPage() {
             style={{
               backgroundColor: themeColors?.surface,
               border: `1px solid ${themeColors?.border}`,
+              minHeight: 0,
             }}
           >
             {selectedResult ? (
-              <div className="h-full overflow-y-auto p-6">
-                <TechDetail result={selectedResult} />
-              </div>
+              <TechDetail result={selectedResult} />
             ) : (
               <div
                 className="h-full flex flex-col items-center justify-center gap-4"

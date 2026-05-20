@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { DemandInput } from '@/components/demand/DemandInput';
 import { DemandList } from '@/components/demand/DemandList';
@@ -48,10 +47,23 @@ export function DemandPage() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full gap-4">
+    <div className="flex flex-col h-full gap-4" style={{ minHeight: 0 }}>
       <Breadcrumb />
-      <div className="flex flex-1 overflow-hidden gap-4">
-        <div className="flex-1 flex gap-4 overflow-hidden">
+      {/* 需求统计概览 */}
+      <div className="flex gap-3 flex-shrink-0">
+        {[
+          { label: '全部需求', count: demands.length, color: themeColors?.primary },
+          { label: '草稿', count: demands.filter(d => d.status === 'draft').length, color: themeColors?.warning },
+          { label: '已完成', count: demands.filter(d => d.status === 'completed').length, color: themeColors?.success },
+        ].map(item => (
+          <div key={item.label} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs" style={{ backgroundColor: item.color + '15', color: item.color }}>
+            <span className="font-bold text-sm">{item.count}</span>
+            <span>{item.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-1 overflow-hidden gap-4" style={{ minHeight: 0 }}>
+        <div className="flex-1 flex gap-4 overflow-hidden" style={{ minHeight: 0 }}>
           {/* 左侧：输入区和列表 */}
           <div
             className="w-80 flex-shrink-0 flex flex-col gap-4 overflow-y-auto"
@@ -80,6 +92,7 @@ export function DemandPage() {
             style={{
               backgroundColor: themeColors?.surface,
               border: `1px solid ${themeColors?.border}`,
+              minHeight: 0,
             }}
           >
             {selectedDemand ? (
@@ -90,16 +103,16 @@ export function DemandPage() {
                   style={{ borderBottom: `1px solid ${themeColors?.border}` }}
                 >
                   <div className="flex items-center gap-3 mb-3">
-                    <Link
-                      to="/"
+                    <button
+                      onClick={() => setSelectedDemand(null)}
                       className="px-3 py-1.5 rounded-lg text-sm transition-colors hover:scale-[0.98]"
                       style={{
                         backgroundColor: themeColors?.surfaceHover,
                         color: themeColors?.textSecondary,
                       }}
                     >
-                      ← 返回
-                    </Link>
+                      ← 返回列表
+                    </button>
                     {selectedDemand.status === 'draft' && (
                       <span
                         className="px-2.5 py-1 rounded-lg text-xs font-medium"
