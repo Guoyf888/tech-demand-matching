@@ -12,9 +12,9 @@ export interface VersionInfo {
 
 // 初始版本信息
 const INIT_VERSION: VersionInfo = {
-  version: 'v2.0.0',
+  version: 'v2.0.1',
   updateTime: '2026-05-20',
-  description: 'Skills执行系统全面升级+HermesAgent主动执行+OpenHuman模式集成，6个新模块，6个文件重构'
+  description: '修复TechPage溢出、SkillsPage乱码、三页区分化，页面布局问题全面修复'
 };
 
 // 全局版本配置Hook

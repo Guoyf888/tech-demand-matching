@@ -1,5 +1,18 @@
 [
   {
+    "version": "v2.0.1",
+    "update_time": "2026-05-20 16:00:00",
+    "content": [
+      "修复TechPage溢出：移除TechPage与TechDetail双重scroll嵌套，flex容器添加minHeight:0",
+      "修复DemandPage：移除失效Link返回按钮改为清除选中，flex容器添加minHeight:0",
+      "修复SkillsPage乱码：builtInSkills所有技能补充group和isBuiltIn字段",
+      "重写SkillsPage分组逻辑：内置/Hermes/OpenClaw/自定义四组无重复，新增Hermes技能源",
+      "三页区分化：DemandPage新增需求统计横幅，TechPage新增成果统计横幅，PlatformPage新增匹配引擎标识",
+      ".gitignore新增openhuman-main排除",
+      "版本号升级至v2.0.1"
+    ]
+  },
+  {
     "version": "v2.0.0",
     "update_time": "2026-05-20 10:00:00",
     "content": [
