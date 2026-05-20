@@ -12,9 +12,9 @@ export interface VersionInfo {
 
 // 初始版本信息
 const INIT_VERSION: VersionInfo = {
-  version: 'v1.9.0',
-  updateTime: '2026-05-19',
-  description: '全面查漏补缺：22项Bug修复与代码质量提升，新增ErrorBoundary、Markdown渲染、AbortSignal超时机制'
+  version: 'v2.0.0',
+  updateTime: '2026-05-20',
+  description: 'Skills执行系统全面升级+HermesAgent主动执行+OpenHuman模式集成，6个新模块，6个文件重构'
 };
 
 // 全局版本配置Hook

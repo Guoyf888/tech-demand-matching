@@ -12,11 +12,12 @@
 import { Skill } from '@/types';
 import { getBuiltInSkills } from '@/services/skills/builtInSkills';
 import { getOpenClawService } from '@/services/openclaw/OpenClawService';
+import { getHermesSkillsService } from '@/services/hermes/HermesSkillsService';
 import { skillStore } from '@/services/skills/skillStore';
 
 export interface UnifiedSkill {
   skill: Skill;
-  source: 'native' | 'openclaw' | 'custom';
+  source: 'native' | 'openclaw' | 'custom' | 'hermes';
   displayName: string;
   matchScore: number;
 }
@@ -92,6 +93,20 @@ class UnifiedSkillService {
         unifiedSkills.push({
           skill,
           source: 'custom',
+          displayName: skill.name,
+          matchScore: 0,
+        });
+      }
+    }
+
+    // 4. Hermes 技能
+    const hermesService = getHermesSkillsService();
+    const hermesSkills = hermesService.getAllSkills();
+    for (const skill of hermesSkills) {
+      if (skill.enabled && !unifiedSkills.find(u => u.skill.name === skill.name)) {
+        unifiedSkills.push({
+          skill,
+          source: 'hermes',
           displayName: skill.name,
           matchScore: 0,
         });
@@ -202,11 +217,12 @@ class UnifiedSkillService {
   /**
    * 获取技能统计
    */
-  getStats(): { native: number; openclaw: number; custom: number; total: number } {
+  getStats(): { native: number; openclaw: number; hermes: number; custom: number; total: number } {
     const all = this.getAllSkills();
     return {
       native: all.filter(s => s.source === 'native').length,
       openclaw: all.filter(s => s.source === 'openclaw').length,
+      hermes: all.filter(s => s.source === 'hermes').length,
       custom: all.filter(s => s.source === 'custom').length,
       total: all.length,
     };
@@ -259,11 +275,38 @@ class UnifiedSkillService {
 
         case 'native':
         case 'custom': {
-          // 内置/自定义技能模拟执行
-          // 实际应用中，这里会根据技能类型调用不同的处理函数
+          // 内置/自定义技能通过LLM执行
+          const systemPrompt = (skill.content
+            ? skill.content
+            : `You are the "${skill.name}" skill. ${skill.description}\nAvailable actions: ${(skill.actions || []).map(a => a.name).join(', ')}`
+          ).slice(0, 8192);
+          const userMessage = (params.query as string) || (params.task as string) || `Execute skill: ${skill.name}`;
+          try {
+            const { claudeChat } = await import('@/services/claudeCode');
+            const result = await claudeChat(userMessage, [], { systemPrompt });
+            return {
+              success: result.success,
+              output: result.output || result.error,
+              skillName: skill.name,
+              executionTime: Date.now() - startTime,
+            };
+          } catch (err: unknown) {
+            return {
+              success: false,
+              error: err instanceof Error ? err.message : 'Execution failed',
+              skillName,
+              executionTime: Date.now() - startTime,
+            };
+          }
+        }
+
+        case 'hermes': {
+          const hermesService = getHermesSkillsService();
+          const result = await hermesService.executeSkill(skill.name, params);
           return {
-            success: true,
-            output: this.formatSkillOutput(skill, params),
+            success: result.success,
+            output: result.output,
+            error: result.error,
             skillName: skill.name,
             executionTime: Date.now() - startTime,
           };
@@ -284,35 +327,6 @@ class UnifiedSkillService {
         executionTime: Date.now() - startTime,
       };
     }
-  }
-
-  /**
-   * 格式化技能输出
-   */
-  private formatSkillOutput(skill: Skill, _params: Record<string, unknown>): string {
-    const lines = [
-      `[技能: ${skill.icon} ${skill.name}]`,
-      '',
-      `描述: ${skill.description}`,
-      '',
-      `版本: v${skill.version}`,
-      `分组: ${skill.group || '默认'}`,
-      `来源: ${skill.isBuiltIn ? '内置' : '自定义'}`,
-      '',
-    ];
-
-    if (skill.triggers && skill.triggers.length > 0) {
-      lines.push('触发词:', ...skill.triggers.map(t => `  • ${t}`), '');
-    }
-
-    if (skill.actions && skill.actions.length > 0) {
-      lines.push('可用操作:', ...skill.actions.map(a => `  • ${a.name}: ${a.description}`), '');
-    }
-
-    lines.push('---');
-    lines.push('技能执行完成');
-
-    return lines.join('\n');
   }
 
   /**

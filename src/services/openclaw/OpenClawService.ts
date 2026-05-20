@@ -523,12 +523,18 @@ export class OpenClawService {
       return { success: false, error: `Skill not found: ${skillId}` };
     }
 
-    // Simulate skill execution for now
-    // In a full implementation, this would call the actual skill handler
-    return {
-      success: true,
-      output: `[OpenClaw Skill: ${skill.name}]\n\nExecuting skill with params: ${JSON.stringify(params)}\n\nSkill description: ${skill.description}\n\nThis is a simulated execution. In full integration, this would execute the actual skill commands.`
-    };
+    const systemPrompt = (skill.content || `You are executing the "${skill.name}" skill. ${skill.description}`).slice(0, 8192);
+    const userMessage = (params.query as string) || (params.task as string) || skill.description;
+    try {
+      const { claudeChat } = await import('@/services/claudeCode');
+      const result = await claudeChat(userMessage, [], { systemPrompt });
+      if (result.success && result.output) {
+        return { success: true, output: result.output };
+      }
+      return { success: false, error: result.error || 'Execution failed' };
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+    }
   }
 }
 

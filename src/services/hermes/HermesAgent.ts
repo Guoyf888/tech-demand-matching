@@ -14,6 +14,10 @@ import { getBuiltInSkills } from '@/services/skills/builtInSkills';
 import { searchService } from '@/services/search';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeEncoding } from './skillManager';
+import { type TierLevel, TIER_CONFIGS } from './AgentTier';
+import { runToolLoop, type ToolLoopResult } from './ToolLoop';
+import { skillInjector } from '@/services/skills/SkillInjector';
+import { unifiedSkillService } from '@/services/skills/UnifiedSkillService';
 
 /**
  * 工具名称规范化 - 增强容错
@@ -286,13 +290,25 @@ const documentAnalysisTool: Tool = {
   category: 'document',
   source: 'hermes',
   execute: async (params: Record<string, unknown>): Promise<ToolResult> => {
-    // 优先使用params.document，其次使用params.task（从executeStep传入）
     const document = (params.document as string) || (params.task as string) || '未指定文档';
     const type = params.type || 'general';
-    return {
-      success: true,
-      output: `[Document Analysis] 文档分析\n文档: ${document}\n分析类型: ${type}\n\n主要实体已提取，摘要已生成。`
-    };
+
+    const analysisPrompt = `你是一位专业的文档分析专家。请对以下文档进行${type === 'general' ? '综合' : String(type)}分析，提取关键信息、生成摘要、识别主要实体和关键数据点。
+
+文档内容：
+${document.slice(0, 4000)}
+
+请用中文输出结构化分析结果。`;
+
+    try {
+      const result = await claudeChat(analysisPrompt);
+      return {
+        success: result.success,
+        output: result.success ? result.output : `文档分析失败: ${formatErrorMessage(result.error)}`
+      };
+    } catch (error: unknown) {
+      return { success: false, error: formatErrorMessage(error) };
+    }
   }
 };
 
@@ -388,9 +404,16 @@ const nativeSkillTool: Tool = {
         return { success: false, error: `未找到内置技能: ${skillName}` };
       }
 
+      const systemPrompt = (skill.content
+        ? skill.content
+        : `You are the "${skill.name}" skill. ${skill.description}`
+      ).slice(0, 8192);
+      const userMessage = (params.query as string) || (params.task as string) || `Execute ${skill.name}: ${action || 'default'}`;
+
+      const result = await claudeChat(userMessage, [], { systemPrompt });
       return {
-        success: true,
-        output: `[内置技能: ${skill.name}]\n\n执行技能...\n描述: ${skill.description}\n操作: ${action || '默认'}\n\n技能执行完成。`
+        success: result.success,
+        output: result.success ? result.output : `技能执行失败: ${formatErrorMessage(result.error)}`
       };
     } catch (error: unknown) {
       return { success: false, error: formatErrorMessage(error) };
@@ -1401,6 +1424,23 @@ export class HermesAgent {
     } catch (error) {
       console.error('重置会话失败:', error);
     }
+  }
+
+  /**
+   * 使用层级系统执行任务（Phase 3 核心方法）
+   * 结合 SkillInjector + AgentTier + ToolLoop
+   */
+  async executeWithTier(userTask: string, tier: TierLevel): Promise<ToolLoopResult> {
+    const tierConfig = TIER_CONFIGS[tier];
+
+    // 通过 SkillInjector 获取相关技能内容
+    const allSkills = unifiedSkillService.getAllSkills().map(u => u.skill);
+    const injection = skillInjector.inject(allSkills, userTask);
+
+    return runToolLoop(userTask, tierConfig, {
+      systemPrompt: tierConfig.systemPromptPrefix,
+      skillContent: injection.rendered || undefined,
+    });
   }
 }
 

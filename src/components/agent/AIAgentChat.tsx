@@ -14,6 +14,10 @@ import { getHermesAgent } from '@/services/hermes/HermesAgent';
 import { getHermesSkillsService } from '@/services/hermes/HermesSkillsService';
 import { getTechMatchAgent } from '@/services/hermes/TechMatchAgent';
 import { unifiedSkillService } from '@/services/skills/UnifiedSkillService';
+import { getIntentClassifier } from '@/services/hermes/IntentClassifier';
+import { getSkillExecutionBridge } from '@/services/hermes/SkillExecutionBridge';
+import { skillInjector } from '@/services/skills/SkillInjector';
+import { selectTier } from '@/services/hermes/AgentTier';
 import {
   Bot, Sparkles, Zap, Lightbulb,
   FileText, Code, Upload, File, X, CheckCircle2,
@@ -88,6 +92,9 @@ export function AIAgentChat() {
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentPreview, setDocumentPreview] = useState<{ text: string; type: string; industries: string[]; techs: string[] } | null>(null);
 
+  // 主动技能推荐状态
+  const [suggestedSkill, setSuggestedSkill] = useState<{ name: string; description: string } | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const terminalInputRef = useRef<HTMLInputElement>(null);
@@ -110,6 +117,26 @@ export function AIAgentChat() {
       addTerminalLine('system', '');
     });
   }, []);
+
+  // 主动技能推荐（输入时防抖检测）
+  useEffect(() => {
+    if (mode !== 'chat' || input.length < 5) {
+      setSuggestedSkill(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const recommended = unifiedSkillService.recommendSkills(input, 1);
+      if (recommended.length > 0 && recommended[0].matchScore >= 30) {
+        setSuggestedSkill({
+          name: recommended[0].skill.name,
+          description: recommended[0].skill.description,
+        });
+      } else {
+        setSuggestedSkill(null);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [input, mode]);
 
   const addTerminalLine = useCallback((type: string, content: string) => {
     setTerminalLines(prev => [...prev, { type, content }]);
@@ -203,6 +230,58 @@ export function AIAgentChat() {
       await handleHermesTask(fullInput);
     } else if (mode === 'chat') {
       addUnifiedMessage('user', fullInput);
+      // 智能意图分类 + 层级路由（仅 Chat 模式）
+      try {
+        const classifier = getIntentClassifier();
+        const classification = await classifier.classify(fullInput);
+
+        if (classification.intent !== 'simple-chat' && classification.confidence >= 0.7) {
+          // 根据意图选择 Agent 层级
+          const tier = selectTier(classification.intent);
+
+          if (tier === 'reasoning' || tier === 'worker') {
+            // 使用 ToolLoop 执行复杂任务
+            setIsLoading(true);
+            const hermes = getHermesAgent();
+            const result = await hermes.executeWithTier(fullInput, tier);
+            if (result.success && result.finalOutput) {
+              const toolInfo = result.toolCalls.length > 0
+                ? `\n\n<details><summary>调用了 ${result.iterations} 个工具</summary>${result.toolCalls.map(t => `\n- ${t.toolId}`).join('')}</details>`
+                : '';
+              addUnifiedMessage('ai', result.finalOutput + toolInfo);
+              setInput('');
+              setDocumentFile(null);
+              setDocumentPreview(null);
+              if (inputRef.current) {
+                inputRef.current.style.height = 'auto';
+              }
+              setIsLoading(false);
+              return;
+            }
+            setIsLoading(false);
+          }
+
+          // 降级：尝试直接桥接执行
+          const bridge = getSkillExecutionBridge();
+          const bridgeResult = await bridge.execute(classification, fullInput);
+
+          if (bridgeResult && bridgeResult.success) {
+            const sourceLabel = bridgeResult.source === 'skill' ? '🔧 技能'
+              : bridgeResult.source === 'tool' ? '⚡ 工具'
+              : '📊 分析';
+            addUnifiedMessage('ai', `${sourceLabel} [${bridgeResult.skillOrToolName}]\n\n${bridgeResult.output}`);
+            setInput('');
+            setDocumentFile(null);
+            setDocumentPreview(null);
+            if (inputRef.current) {
+              inputRef.current.style.height = 'auto';
+            }
+            return;
+          }
+        }
+      } catch {
+        // 意图分类失败，降级到普通对话
+      }
       await handleAIChat(fullInput);
     } else if (mode === 'smart-agent') {
       await handleSmartAgentTask(fullInput);
@@ -226,14 +305,18 @@ export function AIAgentChat() {
         setActiveProvider(selectedModel as typeof activeProvider);
       }
 
-      const skillPrompt = unifiedSkillService.generateSkillContext();
-      const recommendedSkills = unifiedSkillService.recommendSkills(userInput, 1);
+      // 使用 SkillInjector 进行 3-tier 技能注入（OpenHuman 模式）
+      const allSkills = unifiedSkillService.getAllSkills().map(u => u.skill);
+      const injection = skillInjector.inject(allSkills, userInput);
 
-      let systemPrompt = `你是技术经理人的AI助手，可以帮助分析技术需求、技术成果，提供创新建议，促成技术对接。用专业但易懂的语言回答。${skillPrompt}`;
+      let systemPrompt = `你是技术经理人的AI助手，可以帮助分析技术需求、技术成果，提供创新建议，促成技术对接。用专业但易懂的语言回答。`;
 
-      if (recommendedSkills[0]) {
-        const matchedSkill = recommendedSkills[0].skill;
-        systemPrompt += `\n\n用户可能想使用技能: ${matchedSkill.name} - ${matchedSkill.description}`;
+      if (injection.rendered) {
+        systemPrompt += '\n\n' + injection.rendered;
+      } else {
+        // 降级：当 SkillInjector 无匹配时，保留原有技能上下文
+        const skillPrompt = unifiedSkillService.generateSkillContext();
+        systemPrompt += skillPrompt;
       }
 
       const response = await apiGateway.chat({
@@ -456,6 +539,7 @@ ${demandSkill.content}
         addTerminalLine('system', `  内置技能: ${skills.native} 个`);
         addTerminalLine('system', `  自定义技能: ${skills.custom} 个`);
         addTerminalLine('system', `  OpenClaw技能: ${skills.openclaw} 个`);
+        addTerminalLine('system', `  Hermes技能: ${skills.hermes} 个`);
         addTerminalLine('system', `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       },
     },
@@ -583,7 +667,7 @@ ${demandSkill.content}
   // Skills shortcut buttons
   const handleSkillsAction = (skillName: string) => {
     const skillStats = unifiedSkillService.getStats();
-    addUnifiedMessage('system', `📦 技能库: ${skillName}\n\n内置技能: ${skillStats.native} | 自定义技能: ${skillStats.custom} | OpenClaw: ${skillStats.openclaw}`);
+    addUnifiedMessage('system', `📦 技能库: ${skillName}\n\n内置技能: ${skillStats.native} | 自定义技能: ${skillStats.custom} | OpenClaw: ${skillStats.openclaw} | Hermes: ${skillStats.hermes}`);
     handleHermesTask(`请使用${skillName}技能处理当前需求`);
   };
 
@@ -1175,6 +1259,49 @@ ${demandSkill.content}
                     className="ml-1 p-0.5 rounded hover:bg-black/10"
                   >
                     <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              {/* 主动技能推荐提示 */}
+              {suggestedSkill && mode === 'chat' && (
+                <div
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs mb-1"
+                  style={{
+                    backgroundColor: `${themeColors?.primary}15`,
+                    border: `1px solid ${themeColors?.primary}30`,
+                  }}
+                >
+                  <Sparkles size={12} style={{ color: themeColors?.primary }} />
+                  <span style={{ color: themeColors?.text }}>
+                    检测到技能: <strong>{suggestedSkill.name}</strong>
+                    <span style={{ color: themeColors?.textSecondary }}> - {suggestedSkill.description.slice(0, 30)}</span>
+                  </span>
+                  <button
+                    onClick={async () => {
+                      const bridge = getSkillExecutionBridge();
+                      const result = await bridge.execute(
+                        { intent: 'skill-execution', confidence: 1, matchedSkill: suggestedSkill.name },
+                        input
+                      );
+                      if (result?.success) {
+                        addUnifiedMessage('user', input);
+                        addUnifiedMessage('ai', `🔧 [${result.skillOrToolName}]\n\n${result.output}`);
+                        setInput('');
+                        setSuggestedSkill(null);
+                      }
+                    }}
+                    className="ml-auto px-2 py-0.5 rounded text-xs font-medium"
+                    style={{ backgroundColor: themeColors?.primary, color: '#fff' }}
+                  >
+                    使用
+                  </button>
+                  <button
+                    onClick={() => setSuggestedSkill(null)}
+                    className="px-1 py-0.5 rounded text-xs"
+                    style={{ color: themeColors?.textSecondary }}
+                  >
+                    <X size={10} />
                   </button>
                 </div>
               )}

@@ -1,5 +1,29 @@
 [
   {
+    "version": "v2.0.0",
+    "update_time": "2026-05-20 10:00:00",
+    "content": [
+      "【Phase 1】技能执行系统全面升级：所有技能（Native/OpenClaw/Hermes）从模拟执行改为真实LLM执行",
+      "HermesSkillsService新增executeSkill()方法：使用SKILL.md内容作为system prompt调用LLM",
+      "UnifiedSkillService注册Hermes技能源：统一技能库新增Hermes层，技能统计增加hermes计数",
+      "OpenClawService.executeSkill()从模拟改为真实LLM调用",
+      "nativeSkillTool和documentAnalysisTool从静态输出改为LLM驱动",
+      "Chat模式系统提示注入技能完整内容：[SKILL:name]...[/SKILL]格式，8KB上限",
+      "内置技能补充SKILL.md内容：summarize/deep-research/代码助手/数据分析",
+      "【Phase 2】IntentClassifier意图分类器：2层策略（快速规则+LLM分类），5种意图类型",
+      "SkillExecutionBridge执行桥接：意图->技能/工具/领域分析的自动路由",
+      "Chat模式智能意图分类：自动检测政策问答/产业链分析等意图，无需手动切换模式",
+      "主动技能推荐UI：输入时防抖检测匹配技能，显示可点击的推荐chip",
+      "【Phase 3】SkillInjector技能注入器：移植OpenHuman inject.rs的3-tier匹配算法",
+      "AgentTier层级系统：Chat/Reasoning/Worker三级，不同温度/token/迭代配置",
+      "ToolLoop有界工具循环：最大10次迭代，30s工具超时，结果截断2000字符",
+      "EventBus事件总线：跨服务解耦通信，支持skill/executed、agent/tool.call等事件",
+      "HermesAgent新增executeWithTier()：整合层级+注入+工具循环的统一执行入口",
+      "6个新模块：IntentClassifier/SkillExecutionBridge/SkillInjector/AgentTier/ToolLoop/EventBus",
+      "版本号升级至v2.0.0"
+    ]
+  },
+  {
     "version": "v1.9.0",
     "update_time": "2026-05-19 10:00:00",
     "content": [

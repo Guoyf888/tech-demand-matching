@@ -564,6 +564,29 @@ export class HermesSkillsService {
     );
   }
 
+  // 执行技能 - 通过LLM真正执行
+  async executeSkill(skillName: string, params: Record<string, unknown> = {}): Promise<{ success: boolean; output?: string; error?: string }> {
+    const skill = this.getSkillByName(skillName);
+    if (!skill) {
+      return { success: false, error: `Hermes skill not found: ${skillName}` };
+    }
+    if (!skill.content) {
+      return { success: false, error: `Skill has no content: ${skillName}` };
+    }
+    const systemPrompt = skill.content.slice(0, 8192);
+    const userMessage = (params.query as string) || (params.task as string) || skill.description;
+    try {
+      const { claudeChat } = await import('@/services/claudeCode');
+      const result = await claudeChat(userMessage, [], { systemPrompt });
+      if (result.success && result.output) {
+        return { success: true, output: result.output };
+      }
+      return { success: false, error: result.error || 'LLM execution failed' };
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+    }
+  }
+
   // 获取分组技能
   getSkillsByGroup(group: string): Skill[] {
     return Array.from(this.skills.values()).filter(s => s.group === group);
