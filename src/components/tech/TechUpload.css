@@ -1,27 +1,29 @@
 /* 完全对齐输入需求的样式体系 */
 .tech-upload-container {
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-container);
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
-/* 页面标题（对齐输入需求的标题样式） */
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+/* 页面标题与 API 状态分层展示，避免窄侧栏互相挤压 */
+.tech-upload-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid #e5e7eb;
 }
 
-.page-header h2 {
+.tech-upload-header h2 {
   font-size: 20px;
   font-weight: 600;
   color: #1a1a1a;
   margin: 0;
+  white-space: nowrap;
 }
 
 /* API状态徽章（对齐输入需求的状态提示样式） */
@@ -29,35 +31,31 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  min-width: 0;
+  padding: 8px 10px;
   border-radius: 6px;
   background-color: #f7f8fa;
 }
 
 .status-icon {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  line-height: 16px;
-  text-align: center;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: bold;
+  display: inline-flex;
+  flex: 0 0 auto;
 }
 
-.status-icon.success {
-  background-color: #e8f5e9;
+.api-status-badge.is-ready .status-icon {
   color: #00B42A;
 }
 
-.status-icon.error {
-  background-color: #fef2f2;
+.api-status-badge.has-error .status-icon {
   color: #dc2626;
 }
 
 .status-text {
+  min-width: 0;
   font-size: 14px;
   color: #4a4a4a;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 /* 错误提示（对齐输入需求的错误提示样式） */
@@ -67,6 +65,12 @@
   margin-bottom: 20px;
   font-size: 14px;
   line-height: 1.5;
+}
+
+.success-box {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
 }
 
 .error-validate {
@@ -95,16 +99,16 @@
 
 /* 表单容器（对齐输入需求的表单布局） */
 .form-container {
-  background-color: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 24px;
-  margin-bottom: 24px;
+  min-width: 0;
+  background-color: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
 }
 
 /* 表单项（对齐输入需求的表单项样式） */
 .form-item {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .form-label {
@@ -180,72 +184,6 @@
   font-size: 12px;
   color: #717171;
   line-height: 1.4;
-}
-
-/* 操作按钮（完全对齐输入需求的按钮样式） */
-.form-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 32px;
-}
-
-.btn {
-  padding: 10px 24px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn-secondary {
-  background-color: #f3f4f6;
-  color: #4a4a4a;
-  border: 1px solid #d1d5db;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background-color: #e5e7eb;
-  color: #1a1a1a;
-}
-
-.btn-primary {
-  background-color: #00B42A;
-  color: #ffffff;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: #008a1e;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn.loading {
-  position: relative;
-  pointer-events: none;
-}
-
-.btn.loading::after {
-  content: '';
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  border: 2px solid #ffffff;
-  border-top: 2px solid transparent;
-  border-radius: 50%;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: translateY(-50%) rotate(0deg); }
-  100% { transform: translateY(-50%) rotate(360deg); }
 }
 
 /* 分析结果预览（对齐输入需求的结果展示样式） */

@@ -13,13 +13,14 @@
  * - MAX_ITERATIONS = 10 硬上限
  * - 每工具 30s 超时
  * - 工具结果截断 2000 字符
- * - 解析失败 = 降级为直接回答
+ * - 非法工具调用显式失败，普通文本继续作为最终回答
  */
 
 import { claudeChat } from '@/services/claudeCode';
 import { getHermesAgent, type ToolResult } from './HermesAgent';
 import type { AgentTierConfig } from './AgentTier';
 import { eventBus, EventTypes } from '@/services/EventBus';
+import { jsonrepair } from 'jsonrepair';
 
 const MAX_ITERATIONS = 10;
 const TOOL_TIMEOUT_MS = 30000;
@@ -34,11 +35,82 @@ export interface ToolLoopResult {
   success: boolean;
   finalOutput: string;
   iterations: number;
+  exitReason: 'completed' | 'llm_error' | 'invalid_tool_call' | 'tool_timeout' | 'max_iterations';
   toolCalls: Array<{
     toolId: string;
     result: ToolResult;
     iteration: number;
   }>;
+}
+
+interface ToolLoopContext {
+  systemPrompt?: string;
+  skillContent?: string;
+  toolTimeoutMs?: number;
+  toolResultMaxChars?: number;
+}
+
+type ParsedToolCall =
+  | { kind: 'none' }
+  | { kind: 'valid'; request: ToolCallRequest }
+  | { kind: 'invalid'; error: string };
+
+function parseToolCall(output: string): ParsedToolCall {
+  const jsonFenced = output.match(/```json\s*([\s\S]*?)```/i);
+  const genericFenced = output.match(/```\s*([\s\S]*?)```/);
+  const genericCandidate = genericFenced?.[1]?.trim() || '';
+  const trimmed = output.trim();
+  const candidate = jsonFenced?.[1]?.trim()
+    || (genericCandidate.startsWith('{') ? genericCandidate : '')
+    || (trimmed.startsWith('{') && trimmed.endsWith('}') ? trimmed : '');
+
+  if (!candidate) return { kind: 'none' };
+
+  try {
+    const parsed = JSON.parse(jsonrepair(candidate)) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { kind: 'invalid', error: '工具调用必须是 JSON 对象' };
+    }
+
+    const record = parsed as Record<string, unknown>;
+    if (!Object.prototype.hasOwnProperty.call(record, 'tool')) return { kind: 'none' };
+    if (typeof record.tool !== 'string' || !record.tool.trim()) {
+      return { kind: 'invalid', error: '工具调用缺少有效的 tool 字段' };
+    }
+    if (record.params !== undefined && (
+      !record.params
+      || typeof record.params !== 'object'
+      || Array.isArray(record.params)
+    )) {
+      return { kind: 'invalid', error: '工具调用 params 必须是 JSON 对象' };
+    }
+
+    return {
+      kind: 'valid',
+      request: {
+        tool: record.tool,
+        params: (record.params as Record<string, unknown> | undefined) || {},
+      },
+    };
+  } catch (error) {
+    return {
+      kind: 'invalid',
+      error: error instanceof Error ? error.message : '无法解析工具调用',
+    };
+  }
+}
+
+function formatToolOutput(result: ToolResult, maxChars: number): string {
+  const output = result.output || result.error || 'No output';
+  if (output.length <= maxChars) return output;
+  return `${output.slice(0, maxChars)}\n\n[工具结果已截断：原始 ${output.length} 字符，仅向模型注入前 ${maxChars} 字符；完整结果保留在本次执行记录中。]`;
+}
+
+class ToolTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`工具执行超时（${timeoutMs}ms）`);
+    this.name = 'ToolTimeoutError';
+  }
 }
 
 /**
@@ -47,13 +119,15 @@ export interface ToolLoopResult {
 export async function runToolLoop(
   userTask: string,
   tierConfig: AgentTierConfig,
-  context: { systemPrompt?: string; skillContent?: string } = {}
+  context: ToolLoopContext = {}
 ): Promise<ToolLoopResult> {
   const hermes = getHermesAgent();
   const tools = hermes.getTools();
   const toolDescriptions = tools.map(t => `- ${t.name}: ${t.description}`).join('\n');
 
   const maxIter = Math.min(tierConfig.maxIterations, MAX_ITERATIONS);
+  const toolTimeoutMs = context.toolTimeoutMs ?? TOOL_TIMEOUT_MS;
+  const toolResultMaxChars = context.toolResultMaxChars ?? TOOL_RESULT_MAX_CHARS;
 
   const systemPrompt = `${context.systemPrompt || tierConfig.systemPromptPrefix}
 
@@ -74,6 +148,7 @@ ${context.skillContent ? `技能指令：\n${context.skillContent}\n` : ''}
 
   const toolCalls: ToolLoopResult['toolCalls'] = [];
   let finalOutput = '';
+  let exitReason: ToolLoopResult['exitReason'] | null = null;
 
   await eventBus.emit({
     type: EventTypes.AGENT_TASK_START,
@@ -95,29 +170,27 @@ ${context.skillContent ? `技能指令：\n${context.skillContent}\n` : ''}
     );
 
     if (!result.success || !result.output) {
-      finalOutput = result.error || 'LLM 调用失败';
+      finalOutput = `LLM 调用失败：${result.error || '未返回内容'}`;
+      exitReason = 'llm_error';
       break;
     }
 
-    // 检查响应中是否包含工具调用
-    const toolCallMatch =
-      result.output.match(/```json\s*(\{[\s\S]*?\})\s*```/) ||
-      result.output.match(/(\{"tool"\s*:\s*"[^"]+"[\s\S]*?\})/);
-
-    if (!toolCallMatch) {
+    const parsedToolCall = parseToolCall(result.output);
+    if (parsedToolCall.kind === 'none') {
       // 无工具调用 -> 最终答案
       finalOutput = result.output;
+      exitReason = 'completed';
+      break;
+    }
+    if (parsedToolCall.kind === 'invalid') {
+      finalOutput = `工具调用格式无效：${parsedToolCall.error}`;
+      exitReason = 'invalid_tool_call';
       break;
     }
 
+    const toolCall = parsedToolCall.request;
+
     try {
-      const toolCall = JSON.parse(toolCallMatch[1]) as ToolCallRequest;
-
-      if (!toolCall.tool) {
-        finalOutput = result.output;
-        break;
-      }
-
       await eventBus.emit({
         type: EventTypes.AGENT_TOOL_CALL,
         payload: { toolId: toolCall.tool, params: toolCall.params, iteration: i + 1 },
@@ -126,48 +199,76 @@ ${context.skillContent ? `技能指令：\n${context.skillContent}\n` : ''}
       });
 
       // 执行工具（带超时）
-      const toolResult = await Promise.race([
-        hermes.executeTool(toolCall.tool, toolCall.params || {}),
-        new Promise<ToolResult>((_, reject) =>
-          setTimeout(() => reject(new Error('Tool timeout')), TOOL_TIMEOUT_MS)
-        ),
-      ]);
+      const controller = new AbortController();
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<ToolResult>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          controller.abort();
+          reject(new ToolTimeoutError(toolTimeoutMs));
+        }, toolTimeoutMs);
+      });
+
+      let toolResult: ToolResult;
+      try {
+        toolResult = await Promise.race([
+          hermes.executeTool(toolCall.tool, toolCall.params, controller.signal),
+          timeoutPromise,
+        ]);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
 
       toolCalls.push({ toolId: toolCall.tool, result: toolResult, iteration: i + 1 });
 
-      // 截断工具结果
-      const truncatedOutput = (toolResult.output || toolResult.error || 'No output')
-        .slice(0, TOOL_RESULT_MAX_CHARS);
+      const toolOutput = formatToolOutput(toolResult, toolResultMaxChars);
 
       // 将工具结果反馈给 LLM
       messages.push(
         { role: 'assistant', content: result.output },
-        { role: 'user', content: `工具 ${toolCall.tool} 的返回结果：\n${truncatedOutput}\n\n请基于此结果继续分析或给出最终答案。` }
+        { role: 'user', content: `工具 ${toolCall.tool} 的返回结果：\n${toolOutput}\n\n请基于此结果继续分析或给出最终答案。` }
       );
     } catch (err) {
-      // 工具调用解析失败或超时 -> 将 LLM 响应作为最终答案
-      finalOutput = result.output;
+      const errorName = err && typeof err === 'object' && 'name' in err
+        ? String((err as { name?: unknown }).name)
+        : '';
+      if (err instanceof ToolTimeoutError || errorName === 'AbortError') {
+        finalOutput = err instanceof ToolTimeoutError
+          ? err.message
+          : `工具执行超时（${toolTimeoutMs}ms）`;
+        exitReason = 'tool_timeout';
+      } else {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const failedResult: ToolResult = { success: false, error: errorMessage };
+        toolCalls.push({ toolId: toolCall.tool, result: failedResult, iteration: i + 1 });
+        messages.push(
+          { role: 'assistant', content: result.output },
+          { role: 'user', content: `工具 ${toolCall.tool} 执行失败：${errorMessage}\n\n请调整方案或明确说明无法完成。` }
+        );
+        continue;
+      }
       break;
     }
   }
 
-  // 如果循环结束仍未得到最终答案
-  if (!finalOutput && messages.length > 0) {
-    const lastMsg = messages[messages.length - 1];
-    finalOutput = lastMsg.content || '任务执行完成，但未能生成最终报告。';
+  if (!exitReason) {
+    exitReason = 'max_iterations';
+    finalOutput = `任务达到迭代上限（${maxIter}），尚未生成可验证的最终答案。`;
   }
+
+  const success = exitReason === 'completed';
 
   await eventBus.emit({
     type: EventTypes.AGENT_TASK_END,
-    payload: { success: !!finalOutput, iterations: toolCalls.length, tier: tierConfig.level },
+    payload: { success, exitReason, iterations: toolCalls.length, tier: tierConfig.level },
     timestamp: new Date().toISOString(),
     source: 'ToolLoop',
   });
 
   return {
-    success: !!finalOutput,
+    success,
     finalOutput,
     iterations: toolCalls.length,
+    exitReason,
     toolCalls,
   };
 }

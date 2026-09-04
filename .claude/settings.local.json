@@ -30,7 +30,8 @@
       "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(npx tauri *)"
     ]
   }
 }

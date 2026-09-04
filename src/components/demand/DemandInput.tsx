@@ -2,9 +2,16 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { demandStorage } from '@/services/storage/demandStorage';
 import { Demand } from '@/types';
 import { apiGateway } from '@/services/api/gateway';
-import { themes, useThemeStore } from '@/store/themeStore';
-import { parseDocument, detectContentType, extractIndustryTags, extractTechTags } from '@/services/documentParser';
-import { Upload, FileCheck } from 'lucide-react';
+import { useThemeColors } from '@/store/themeStore';
+import { buildDocumentChatContent, parseDocument, detectContentType, extractIndustryTags, extractTechTags, type ParsedDocument } from '@/services/documentParser';
+import { DocumentReviewModal, type DocumentReviewValue } from '@/components/common/DocumentReviewModal';
+import { AlertTriangle, CheckCircle2, Upload, FileCheck, Save, Sparkles } from 'lucide-react';
+import {
+  NATIONAL_ECONOMIC_INDUSTRY_PROMPT,
+  isNationalEconomicIndustry,
+} from '@/config/industries';
+import { scientificSkillService } from '@/services/skills/scientificSkills';
+import '@/components/tech/TechUpload.css';
 
 interface DemandInputProps {
   onDemandCreated: (demand: Demand) => void;
@@ -94,12 +101,26 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
   // 文档上传状态
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
+  const [pendingDocument, setPendingDocument] = useState<ParsedDocument | null>(null);
+  const [documentContext, setDocumentContext] = useState<ParsedDocument | null>(null);
+  const [apiStatus, setApiStatus] = useState({ valid: false, message: 'AI智能分析初始化中...' });
 
   // 稳定的草稿ID，避免每次autoSave创建新草稿
   const draftId = useMemo(() => `draft_${Date.now()}`, []);
 
-  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
+
+  useEffect(() => {
+    let active = true;
+    void apiGateway.validateConfig().then((validation) => {
+      if (!active) return;
+      setApiStatus({
+        valid: validation.valid,
+        message: validation.valid ? 'AI智能分析已就绪' : (validation.error || 'AI智能分析暂不可用'),
+      });
+    });
+    return () => { active = false; };
+  }, []);
 
   // 当draftToResume变化时，回填数据
   useEffect(() => {
@@ -172,36 +193,19 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const validTypes = ['.docx', '.pdf'];
+    const validTypes = ['.docx', '.pdf', '.xlsx', '.pptx'];
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!validTypes.includes(ext)) {
       setError(`不支持的文件格式，仅支持 ${validTypes.join(', ')}`);
       return;
     }
 
-    setDocumentFile(file);
     setDocumentLoading(true);
     setError(null);
 
     try {
       const parsed = await parseDocument(file);
-      const contentType = detectContentType(parsed.text);
-      const industries = extractIndustryTags(parsed.text);
-      const techs = extractTechTags(parsed.text);
-
-      // 自动填充标题和内容
-      const extractedTitle = parsed.text.split('\n')[0]?.slice(0, 50) || file.name.replace(/\.[^.]+$/, '');
-      const extractedContent = parsed.text.slice(0, 2000);
-
-      setTitle(extractedTitle);
-      setContent(extractedContent);
-
-      // 显示识别结果
-      addExecutionLog(`📄 文档已解析: ${file.name}`);
-      addExecutionLog(`类型: ${contentType === 'demand' ? '技术需求' : contentType === 'result' ? '技术成果' : '待定'}`);
-      addExecutionLog(`行业标签: ${industries.join(', ') || '未识别'}`);
-      addExecutionLog(`技术领域: ${techs.join(', ') || '未识别'}`);
-      addExecutionLog(`内容已自动填充，请检查并补充后提交`);
+      setPendingDocument({ ...parsed, text: parsed.text.slice(0, 50000) });
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : '解析失败';
       setError(`文档解析失败: ${errorMsg}`);
@@ -209,6 +213,51 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
     } finally {
       setDocumentLoading(false);
     }
+  };
+
+  const handleDocumentConfirm = ({ entries, document }: DocumentReviewValue) => {
+    const contentType = detectContentType(document.text);
+    const industries = extractIndustryTags(document.text);
+    const techs = extractTechTags(document.text);
+    setDocumentFile(new File([], document.fileName, { type: 'application/octet-stream' }));
+
+    if (entries.length > 1) {
+      const createdAt = new Date().toISOString();
+      const drafts = entries.map((entry) => ({
+        id: demandStorage.generateId(),
+        title: entry.title.trim().slice(0, 50),
+        content: entry.content.trim().slice(0, 2000),
+        tags: Array.from(new Set([
+          ...extractIndustryTags(`${entry.title}\n${entry.content}`),
+          ...extractTechTags(`${entry.title}\n${entry.content}`),
+        ])).slice(0, 6),
+        status: 'draft' as const,
+        createdAt,
+        updatedAt: createdAt,
+      } satisfies Demand));
+      drafts.forEach((draft) => {
+        demandStorage.save(draft);
+        onDemandCreated(draft);
+      });
+      setTitle('');
+      setContent('');
+      setDocumentContext(null);
+      setError(null);
+      addExecutionLog(`已从 ${document.fileName} 创建 ${drafts.length} 项独立需求草稿`);
+      setPendingDocument(null);
+      return;
+    }
+
+    const [entry] = entries;
+    setDocumentContext(document);
+    setTitle(entry.title.slice(0, 50));
+    setContent(entry.content.slice(0, 2000));
+    addExecutionLog(`📄 文档已确认: ${document.fileName}`);
+    addExecutionLog(`类型: ${contentType === 'demand' ? '技术需求' : contentType === 'result' ? '技术成果' : '待定'}`);
+    addExecutionLog(`行业标签: ${industries.join(', ') || '未识别'}`);
+    addExecutionLog(`技术领域: ${techs.join(', ') || '未识别'}`);
+    addExecutionLog(`已提取 ${document.images?.length || 0} 张图片，内容可继续编辑后提交`);
+    setPendingDocument(null);
   };
 
   const handleSubmit = async () => {
@@ -244,7 +293,7 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
     onDemandCreated(demand);
 
     // 开始AI分析
-    if (apiGateway.isConfigured()) {
+    if (await apiGateway.isConfigured()) {
       setIsAnalyzing(true);
 
       try {
@@ -260,19 +309,30 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
 
         // 步骤3: 执行分析
         addExecutionLog('正在执行深度分析...');
+        const scientificContext = scientificSkillService.buildContext(
+          `${title}\n${content}`,
+          'demand',
+        );
+        if (scientificContext.skills.length > 0) {
+          addExecutionLog(`已启用科研技能: ${scientificContext.skills.map((skill) => skill.name).join(', ')}`);
+        }
         const response = await apiGateway.chat({
           messages: [
             {
               role: 'system',
-              content: `你是一个技术需求分析助手。请分析以下技术需求：
-1. 提取关键词和标签（最多5个）
-2. 分析需求的核心技术方向
-3. 给出简短的技术研发建议
+              content: `你是一个专业AI技术经理人。请分析以下技术需求：
+1. 从以下国民经济行业门类中选择最匹配的一项作为 industry：${NATIONAL_ECONOMIC_INDUSTRY_PROMPT}
+2. 提取技术关键词和标签（最多4个，不要重复 industry）
+3. 分析需求的核心技术方向
+4. 给出简短的技术研发建议
+
+分析时区分事实、推断与待验证假设，并参考以下科学技能方法论：
+${scientificContext.rendered}
 
 请直接返回JSON格式（不要使用markdown代码块），格式如下：
-{"tags": ["标签1", "标签2"], "industryAnalysis": "行业分析...", "techRoadmap": "技术路线...", "suggestions": "创新建议..."}`,
+{"industry": "制造业", "tags": ["标签1", "标签2"], "industryAnalysis": "行业分析...", "techRoadmap": "技术路线...", "suggestions": "创新建议..."}`,
             },
-            { role: 'user', content: `需求标题：${title}\n\n需求详情：${content}` },
+            { role: 'user', content: buildDocumentChatContent(`需求标题：${title}\n\n需求详情：${content}`, documentContext) },
           ],
         });
 
@@ -293,12 +353,24 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
         addExecutionLog('正在生成分析报告...');
         await new Promise(resolve => setTimeout(resolve, 300));
 
-        demand.tags = Array.isArray(analysis.tags) ? analysis.tags.slice(0, 5) : [];
+        const inferredIndustries = extractIndustryTags(`${title}\n${content}`);
+        const selectedIndustry = isNationalEconomicIndustry(analysis.industry)
+          ? [analysis.industry]
+          : inferredIndustries;
+        const aiTags = Array.isArray(analysis.tags)
+          ? analysis.tags.filter((tag): tag is string => typeof tag === 'string')
+          : [];
+        demand.tags = Array.from(new Set([
+          ...selectedIndustry,
+          ...aiTags,
+          ...extractTechTags(`${title}\n${content}`),
+        ])).slice(0, 6);
         demand.analysis = {
           enterpriseInfo: '基于您输入的需求分析',
           industryAnalysis: typeof analysis.industryAnalysis === 'string' ? analysis.industryAnalysis : '暂无行业分析',
           techRoadmap: typeof analysis.techRoadmap === 'string' ? analysis.techRoadmap : '暂无技术路线',
           suggestions: typeof analysis.suggestions === 'string' ? analysis.suggestions : '暂无建议',
+          skills: scientificContext.skills.map((skill) => skill.name),
         };
         demand.status = 'completed';
         demand.updatedAt = new Date().toISOString();
@@ -359,7 +431,7 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
         setIsAnalyzing(false);
       }
     } else {
-      const validation = apiGateway.validateConfig();
+      const validation = await apiGateway.validateConfig();
       let configHint = validation.error || '请先在设置中配置API Key';
 
       setError(configHint);
@@ -383,18 +455,21 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
 
   return (
     <div
-      className="rounded-xl p-5 flex flex-col gap-4"
+      className="rounded-xl p-4 flex flex-col gap-3"
       style={{
         backgroundColor: themeColors?.surface,
         border: `1px solid ${themeColors?.border}`,
       }}
     >
-      <h3
-        className="text-lg font-semibold"
-        style={{ color: themeColors?.text }}
-      >
-        输入技术需求
-      </h3>
+      <div className="tech-upload-header">
+        <h2>输入技术需求</h2>
+        <div className={`api-status-badge ${apiStatus.valid ? 'is-ready' : 'has-error'}`}>
+          <span className="status-icon" aria-hidden="true">
+            {apiStatus.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+          </span>
+          <span className="status-text">{apiStatus.message}</span>
+        </div>
+      </div>
 
       {/* Execution Log */}
       {executionLog.length > 0 && (
@@ -429,7 +504,7 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* 文档上传区域 */}
         <div
           className="border-2 border-dashed rounded-lg p-4 text-center transition-all"
@@ -440,7 +515,7 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
         >
           <input
             type="file"
-            accept=".docx,.pdf"
+            accept=".docx,.pdf,.xlsx,.pptx"
             onChange={handleDocumentUpload}
             className="hidden"
             id="doc-upload"
@@ -465,14 +540,14 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
             ) : (
               <>
                 <Upload size={24} style={{ color: themeColors?.textSecondary }} />
-                <span className="text-sm" style={{ color: themeColors?.textSecondary }}>点击上传WORD/PDF文档</span>
-                <span className="text-xs" style={{ color: themeColors?.textHint }}>支持自动识别需求内容、智能打标签</span>
+                <span className="text-sm" style={{ color: themeColors?.textSecondary }}>点击上传 Word/PDF/Excel/PPT 文档</span>
+                <span className="text-xs" style={{ color: themeColors?.textHint }}>自动提取文字、表格和图片，确认后回填</span>
               </>
             )}
           </label>
           {documentFile && (
             <button
-              onClick={() => { setDocumentFile(null); }}
+              onClick={() => { setDocumentFile(null); setDocumentContext(null); }}
               className="mt-2 text-xs px-2 py-1 rounded"
               style={{ backgroundColor: themeColors?.error + '20', color: themeColors?.error }}
             >
@@ -608,7 +683,7 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder={'请详细描述您的技术需求，包括：\n• 技术指标和性能要求\n• 预期目标和应用场景\n• 预算范围和时间要求\n• 已有技术基础和资源\n\n提示：越详细的需求描述可以获得更精准的分析结果。'}
-            rows={8}
+            rows={6}
             maxLength={2000}
             className="input resize-none"
             style={{
@@ -637,24 +712,35 @@ export function DemandInput({ onDemandCreated, draftToResume, onDraftResumed }: 
         )}
 
         {/* Buttons */}
-        <div className="flex gap-3 pt-2">
+        <div className="workspace-form-actions pt-2">
           <button
+            type="button"
             onClick={handleSaveDraft}
             disabled={isAnalyzing || (!title.trim() && !content.trim())}
-            className="btn-demand-secondary flex-1"
+            className="workspace-form-action is-secondary"
           >
-            {isSavingDraft ? '保存中...' : '💾 保存草稿'}
+            <Save size={16} aria-hidden="true" />
+            <span>{isSavingDraft ? '保存中...' : '保存草稿'}</span>
           </button>
 
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={!title.trim() || !content.trim() || isAnalyzing || isOverLimit}
-            className="btn-demand-primary flex-1"
+            className="workspace-form-action is-primary"
           >
-            {isAnalyzing ? '⏳ 分析中...' : '🚀 提交分析'}
+            <Sparkles size={16} aria-hidden="true" />
+            <span>{isAnalyzing ? '分析中...' : '提交分析'}</span>
           </button>
         </div>
       </div>
+      {pendingDocument && (
+        <DocumentReviewModal
+          document={pendingDocument}
+          onCancel={() => setPendingDocument(null)}
+          onConfirm={handleDocumentConfirm}
+        />
+      )}
     </div>
   );
 }

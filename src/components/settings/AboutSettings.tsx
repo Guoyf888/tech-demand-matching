@@ -1,9 +1,14 @@
-/**
- * 设置页「关于」模块：自动同步version_log.json中的最新版本号
- */
-import React, { useState, useEffect } from 'react';
 import versionLog from '../../../version_log.json';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
+import { HERMES_SOURCE_INFO } from '@/services/hermes/version';
+import {
+  Bot,
+  CalendarDays,
+  CheckCircle2,
+  Cpu,
+  Info,
+  PackageCheck,
+} from 'lucide-react';
 import './AboutSettings.css';
 
 interface VersionEntry {
@@ -12,101 +17,105 @@ interface VersionEntry {
   content: string[];
 }
 
-const AboutSettings: React.FC = () => {
+const formatDate = (value: string) => value.split(' ')[0] || value;
+
+const AboutSettings = () => {
+  const themeColors = useThemeColors();
   const versions = versionLog as VersionEntry[];
-  const latestVersion = versions[0]?.version || 'v1.0.0';
-  const latestUpdateTime = versions[0]?.update_time || '';
-
-  const [editVersion, setEditVersion] = useState<string>(latestVersion);
-  const [editDesc, setEditDesc] = useState<string>(
-    versions[0]?.content?.join('；') || ''
-  );
-
-  const effectiveTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[effectiveTheme as keyof typeof themes]?.colors;
-
-  // 每次组件挂载时从version_log.json同步最新版本
-  useEffect(() => {
-    setEditVersion(latestVersion);
-    setEditDesc(versions[0]?.content?.join('；') || '');
-  }, [latestVersion]);
-
-  const handleSave = () => {
-    // 保存到localStorage作为当前版本信息（供其他地方使用）
-    localStorage.setItem('systemVersion', JSON.stringify({
-      version: editVersion,
-      updateTime: new Date().toLocaleDateString(),
-      description: editDesc
-    }));
-    alert('版本信息已更新！注意：正式版本号需在version_log.json中修改');
-  };
+  const latest = versions[0];
 
   return (
-    <div className="about-settings-container">
-      <h3 className="about-title" style={{ color: themeColors?.text }}>
-        关于技术需求智能对接系统
-      </h3>
-
-      <div className="version-form" style={{
-        backgroundColor: themeColors?.surface,
-        border: `1px solid ${themeColors?.border}`,
-        borderRadius: '12px'
-      }}>
-        <div className="form-item">
-          <label style={{ color: themeColors?.textSecondary }}>当前版本号：</label>
-          <input
-            type="text"
-            value={editVersion}
-            onChange={(e) => setEditVersion(e.target.value)}
-            placeholder="如v1.0.1"
-            className="version-input"
-            style={{
-              backgroundColor: themeColors?.background,
-              color: themeColors?.text,
-              border: `1px solid ${themeColors?.border}`
-            }}
-          />
+    <section
+      className="about-settings-container"
+      style={{
+        backgroundColor: themeColors.surface,
+        border: `1px solid ${themeColors.border}`,
+      }}
+    >
+      <div className="about-heading">
+        <span
+          className="about-heading-icon"
+          style={{ color: themeColors.primary, backgroundColor: themeColors.primaryLight }}
+        >
+          <Info size={19} aria-hidden="true" />
+        </span>
+        <div className="about-heading-copy">
+          <h3 style={{ color: themeColors.text }}>关于系统</h3>
+          <p style={{ color: themeColors.textSecondary }}>AI技术经理人</p>
         </div>
+        <span
+          className="about-status"
+          style={{ color: themeColors.success, backgroundColor: themeColors.successLight }}
+        >
+          <span className="about-status-dot" style={{ backgroundColor: themeColors.success }} />
+          运行正常
+        </span>
+      </div>
 
-        <div className="form-item">
-          <label style={{ color: themeColors?.textSecondary }}>更新说明：</label>
-          <textarea
-            value={editDesc}
-            onChange={(e) => setEditDesc(e.target.value)}
-            placeholder="输入版本更新说明"
-            rows={3}
-            className="version-textarea"
-            style={{
-              backgroundColor: themeColors?.background,
-              color: themeColors?.text,
-              border: `1px solid ${themeColors?.border}`
-            }}
-          />
+      <div className="about-facts" style={{ borderColor: themeColors.border }}>
+        <div className="about-fact">
+          <PackageCheck size={17} style={{ color: themeColors.primary }} aria-hidden="true" />
+          <span style={{ color: themeColors.textHint }}>应用版本</span>
+          <strong style={{ color: themeColors.text }}>{latest?.version || 'v2.1.7'}</strong>
         </div>
+        <div className="about-fact">
+          <CalendarDays size={17} style={{ color: themeColors.primary }} aria-hidden="true" />
+          <span style={{ color: themeColors.textHint }}>更新日期</span>
+          <strong style={{ color: themeColors.text }}>{formatDate(latest?.update_time || '')}</strong>
+        </div>
+        <div className="about-fact">
+          <Cpu size={17} style={{ color: themeColors.primary }} aria-hidden="true" />
+          <span style={{ color: themeColors.textHint }}>Hermes 兼容协议</span>
+          <strong style={{ color: themeColors.text }}>v{HERMES_SOURCE_INFO.compatibilityVersion}</strong>
+        </div>
+      </div>
 
-        <div className="form-item">
-          <label style={{ color: themeColors?.textSecondary }}>最后更新时间：</label>
-          <span className="readonly-text" style={{ color: themeColors?.text }}>
-            {latestUpdateTime}
+      <div
+        className="hermes-integration"
+        style={{ backgroundColor: themeColors.backgroundAlt, borderColor: themeColors.border }}
+      >
+        <div className="hermes-summary">
+          <span
+            className="hermes-agent-icon"
+            style={{ color: themeColors.primary, backgroundColor: themeColors.surface }}
+          >
+            <Bot size={22} aria-hidden="true" />
+          </span>
+          <div>
+            <h4 style={{ color: themeColors.text }}>Hermes TypeScript 适配层</h4>
+            <p style={{ color: themeColors.textSecondary }}>
+              {HERMES_SOURCE_INFO.integration}
+              {' · '}已评估上游 v{HERMES_SOURCE_INFO.reviewedUpstreamVersion}
+              {' · '}{HERMES_SOURCE_INFO.reviewedReleaseDate}
+            </p>
+          </div>
+          <span
+            className="hermes-integrated-badge"
+            style={{ color: themeColors.primary, backgroundColor: themeColors.primaryLight }}
+          >
+            项目适配层
           </span>
         </div>
 
-        <button
-          className="save-btn"
-          onClick={handleSave}
-          style={{
-            backgroundColor: themeColors?.primary,
-            color: '#fff'
-          }}
-        >
-          保存版本信息
-        </button>
+        <div className="hermes-capabilities">
+          {HERMES_SOURCE_INFO.capabilities.map((capability) => (
+            <span key={capability} style={{ color: themeColors.textSecondary }}>
+              <CheckCircle2 size={14} style={{ color: themeColors.success }} aria-hidden="true" />
+              {capability}
+            </span>
+          ))}
+        </div>
       </div>
 
-      <div className="about-hint" style={{ color: themeColors?.textHint }}>
-        注：修改版本号后，系统底部的版本显示会自动同步更新
-      </div>
-    </div>
+      {latest?.content?.length > 0 && (
+        <details className="release-notes" style={{ borderColor: themeColors.border }}>
+          <summary style={{ color: themeColors.text }}>查看 {latest.version} 更新记录</summary>
+          <ul style={{ color: themeColors.textSecondary }}>
+            {latest.content.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </details>
+      )}
+    </section>
   );
 };
 

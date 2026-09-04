@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { demandStorage } from '@/services/storage/demandStorage';
 import { techStorage } from '@/services/storage/techStorage';
-import { findMatches } from '@/services/matching';
+import { runMatching, type MatchingRunResult } from '@/services/matching';
 import { Demand, TechResult } from '@/types';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
 import { FileText, Lightbulb, Handshake, Filter, ChevronDown } from 'lucide-react';
 
 interface MatchResult {
@@ -47,14 +47,14 @@ export function MatchPanel() {
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [isMatching, setIsMatching] = useState(false);
   const [hasRun, setHasRun] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [lastRun, setLastRun] = useState<MatchingRunResult | null>(null);
+  const [unexpectedError, setUnexpectedError] = useState<string | null>(null);
   const [demandCount, setDemandCount] = useState(0);
   const [techCount, setTechCount] = useState(0);
   const [filterMinScore, setFilterMinScore] = useState(0);
   const [showFilter, setShowFilter] = useState(false);
 
-  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   // 加载统计
   useEffect(() => {
@@ -66,19 +66,14 @@ export function MatchPanel() {
 
   const handleMatch = async () => {
     setIsMatching(true);
-    setProgress(0);
-
-    // 模拟进度
-    const progressTimer = setInterval(() => {
-      setProgress(prev => Math.min(prev + Math.random() * 15, 90));
-    }, 800);
+    setUnexpectedError(null);
 
     try {
       const demands = demandStorage.getAll();
       const techResults = techStorage.getAll();
-      const results = await findMatches(demands, techResults);
-      setProgress(100);
-      setMatches(results);
+      const run = await runMatching(demands, techResults);
+      setMatches(run.matches);
+      setLastRun(run);
       setHasRun(true);
       setDemandCount(demands.filter(d => d.status === 'completed').length);
       setTechCount(techResults.filter(t => t.status === 'completed').length);
@@ -86,9 +81,10 @@ export function MatchPanel() {
       const msg = error instanceof Error ? error.message : '匹配过程出现未知错误';
       console.error('匹配失败:', msg);
       setMatches([]);
+      setLastRun(null);
+      setUnexpectedError(msg);
       setHasRun(true);
     } finally {
-      clearInterval(progressTimer);
       setIsMatching(false);
     }
   };
@@ -160,22 +156,64 @@ export function MatchPanel() {
         </div>
       </div>
 
-      {/* 进度条 */}
+      {/* 运行状态：不展示虚构百分比 */}
       {isMatching && (
-        <div className="animate-fade-in">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm" style={{ color: themeColors?.textSecondary }}>正在进行智能匹配分析...</span>
-            <span className="text-sm font-medium" style={{ color: themeColors?.primary }}>{Math.round(progress)}%</span>
+        <div
+          className="animate-pulse rounded-lg px-4 py-3 text-sm"
+          style={{ color: themeColors?.primary, backgroundColor: themeColors?.primaryLight }}
+        >
+          正在评估候选组合，完成前不显示估算百分比…
+        </div>
+      )}
+
+      {lastRun && (
+        <div
+          className="rounded-lg px-4 py-3 text-sm"
+          style={{
+            color: lastRun.status === 'failed' || lastRun.status === 'not_configured'
+              ? themeColors?.error
+              : lastRun.status === 'partial'
+                ? themeColors?.warning
+                : themeColors?.textSecondary,
+            backgroundColor: lastRun.status === 'failed' || lastRun.status === 'not_configured'
+              ? themeColors?.error + '12'
+              : lastRun.status === 'partial'
+                ? themeColors?.warning + '12'
+                : themeColors?.surface,
+            border: `1px solid ${lastRun.status === 'failed' || lastRun.status === 'not_configured'
+              ? themeColors?.error
+              : lastRun.status === 'partial'
+                ? themeColors?.warning
+                : themeColors?.border}`,
+          }}
+        >
+          <div className="font-medium">
+            {lastRun.status === 'failed' ? '匹配执行失败'
+              : lastRun.status === 'not_configured' ? '匹配服务未配置'
+              : lastRun.status === 'partial' ? '匹配部分完成'
+              : lastRun.status === 'no_candidates' ? '没有可评估的候选组合'
+              : `匹配完成，共得到 ${lastRun.matchCount} 项结果`}
           </div>
-          <div className="w-full h-2 rounded-full" style={{ backgroundColor: themeColors?.border }}>
-            <div
-              className="h-full rounded-full transition-all duration-300"
-              style={{
-                width: `${progress}%`,
-                background: `linear-gradient(90deg, ${themeColors?.primary}80, ${themeColors?.primary})`,
-              }}
-            />
+          {lastRun.error && <div className="mt-1">{lastRun.error}</div>}
+          <div className="mt-1 text-xs opacity-80">
+            候选 {lastRun.candidateCount} · 有效评估 {lastRun.evaluatedCount} · 失败 {lastRun.failedCount}
+            {lastRun.provider && ` · ${lastRun.provider}/${lastRun.modelId || '默认模型'}`}
+            {` · ${lastRun.durationMs}ms`}
           </div>
+        </div>
+      )}
+
+      {unexpectedError && (
+        <div
+          className="rounded-lg px-4 py-3 text-sm"
+          style={{
+            color: themeColors?.error,
+            backgroundColor: themeColors?.error + '12',
+            border: `1px solid ${themeColors?.error}`,
+          }}
+        >
+          <div className="font-medium">匹配执行异常</div>
+          <div className="mt-1">{unexpectedError}</div>
         </div>
       )}
 
@@ -246,14 +284,22 @@ export function MatchPanel() {
             className="text-base font-medium"
             style={{ color: themeColors?.text }}
           >
-            {matches.length === 0 ? '暂无匹配结果' : '没有符合筛选条件的匹配'}
+            {unexpectedError || lastRun?.status === 'failed' || lastRun?.status === 'not_configured'
+              ? '本次匹配未成功完成'
+              : lastRun?.status === 'no_candidates'
+                ? '没有可评估的候选组合'
+              : matches.length === 0 ? '没有达到阈值的匹配结果' : '没有符合筛选条件的匹配'}
           </p>
           <p
             className="text-sm mt-2"
             style={{ color: themeColors?.textHint }}
           >
-            {matches.length === 0
-              ? '请确保有已分析完成的需求和技术成果'
+            {unexpectedError || lastRun?.status === 'failed' || lastRun?.status === 'not_configured'
+              ? '请根据上方错误信息修复后重试'
+              : lastRun?.status === 'no_candidates'
+                ? (lastRun.error || '请先准备已完成分析的需求和技术成果')
+              : matches.length === 0
+              ? '候选组合已完成评估，但均低于当前匹配阈值'
               : '请尝试降低筛选条件'}
           </p>
         </div>

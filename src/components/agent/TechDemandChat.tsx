@@ -15,7 +15,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
 import { apiGateway } from '@/services/api/gateway';
 import {
   executePolicyQA,
@@ -106,11 +106,17 @@ export function TechDemandChat() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Theme
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
-  // API状态检查
-  const apiValidation = apiGateway.validateConfig();
+  // API状态检查（异步：从 Keychain 读取 apiKey）
+  const [apiValidation, setApiValidation] = useState<{ valid: boolean; error?: string }>({ valid: false, error: '检查中...' });
+  useEffect(() => {
+    let cancelled = false;
+    apiGateway.validateConfig().then((v) => {
+      if (!cancelled) setApiValidation(v);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // 模型配置
   const modelConfigContext = React.useContext(ModelConfigContext);

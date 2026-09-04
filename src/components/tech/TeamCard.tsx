@@ -1,13 +1,12 @@
 import { TeamMember } from '@/types';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
 
 interface TeamCardProps {
   members: TeamMember[];
 }
 
 export function TeamCard({ members }: TeamCardProps) {
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   if (members.length === 0) {
     return null;

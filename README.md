@@ -1,8 +1,8 @@
 # AI技术经理人智能对接系统
 
-> **TechMatch AI** — 基于 AI Agent 架构的科技成果转化智能匹配平台
+> **AI技术经理人** — 基于 AI Agent 架构的科技成果转化智能匹配平台
 
-[![Version](https://img.shields.io/badge/version-v1.9.0-blue)]()
+[![Version](https://img.shields.io/badge/version-v2.1.7-blue)]()
 [![Tauri](https://img.shields.io/badge/Tauri-v2.x-FFC131)]()
 [![React](https://img.shields.io/badge/React-18-61DAFB)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6)]()
@@ -132,12 +132,17 @@ public/                         # 静态资源
 
 | 版本 | 日期 | 主要更新 |
 |------|------|----------|
+| v2.1.7 | 2026-09-04 | 修复匹配与成果分析假状态，补充运行审计、真实备份键和演示数据标识 |
+| v2.1.6 | 2026-09-04 | 加固 Hermes 工具循环与取消语义，区分真实/模拟搜索数据，并明确 TypeScript 适配层边界 |
+| v2.1.5 | 2026-07-29 | 需求与成果草稿支持多选、全选和一键提交分析，移除需求列表重叠的“已提交”状态行 |
+| v2.1.4 | 2026-07-28 | 优化需求/成果与技能市场布局，支持多条文档拆分、分组重命名，并修复 Windows 安装器启动依赖 |
+| v2.1.3 | 2026-07-28 | 需求页复用成果页 AI 状态栏样式，并固定显示已有需求列表 |
+| v2.1.2 | 2026-07-28 | 统一 AI技术经理人品牌，完善需求/成果状态筛选，支持 DOCX/PDF/XLSX/PPTX 图文提取确认并补充技能中文说明 |
+| v2.1.1 | 2026-07-28 | 统一需求/成果操作区，新增分组、编辑、删除、置顶、星标，并将 138 项科研技能接入 AI 对话和分析流程 |
+| v2.1.0 | 2026-06-22 | 全面修复 22+ 历史 Bug：主题订阅 / JSON 解析 / 关键词预过滤；新增 OS Keychain 存储、流式响应、数据导入导出、API 重试退避、单元测试 |
+| v2.0.1 | 2026-05-20 | 修复 TechPage 溢出 / DemandPage 返回按钮 / SkillsPage 乱码；区分三页面差异化统计 |
+| v2.0.0 | 2026-05-20 | 技能执行系统升级：Hermes/OpenClaw/native 全链路真实 LLM 执行；OpenHuman 3-tier 注入 |
 | v1.9.0 | 2026-05-19 | 全面查漏补缺：22项Bug修复、ErrorBoundary、Markdown渲染、AbortSignal超时 |
-| v1.8.0 | 2026-05-18 | 新增 MiMo/SenseNova 大模型、侧边栏扩展、结构化需求标签、匹配面板重构 |
-| v1.7.0 | 2026-05-18 | 安全加固（API 加密、文件校验、注入防护）、性能优化（懒加载、并发匹配） |
-| v1.6.0 | 2026-04-30 | 优化 AI 对话界面，简化模式切换 |
-| v1.5.0 | 2026-04-26 | 企业级 UI 改版、CSS 设计令牌系统、Lucide 图标库 |
-| v1.0.0 | 2026-04-12 | 初始版本 |
 
 完整版本日志见 [version_log.json](./version_log.json)。
 

@@ -18,6 +18,8 @@ import { type TierLevel, TIER_CONFIGS } from './AgentTier';
 import { runToolLoop, type ToolLoopResult } from './ToolLoop';
 import { skillInjector } from '@/services/skills/SkillInjector';
 import { unifiedSkillService } from '@/services/skills/UnifiedSkillService';
+import { scientificSkillService } from '@/services/skills/scientificSkills';
+import { hermesSessionMemory } from './SessionMemory';
 
 /**
  * 工具名称规范化 - 增强容错
@@ -38,7 +40,11 @@ export interface Tool {
   description: string;
   category: 'code' | 'analysis' | 'search' | 'document' | 'system' | 'openclaw' | 'skill';
   source: 'claude-code' | 'hermes' | 'openclaw' | 'native';
-  execute: (params: Record<string, unknown>) => Promise<ToolResult>;
+  execute: (params: Record<string, unknown>, context?: ToolExecutionContext) => Promise<ToolResult>;
+}
+
+export interface ToolExecutionContext {
+  signal?: AbortSignal;
 }
 
 export interface ToolResult {
@@ -126,7 +132,7 @@ const claudeCodeTool: Tool = {
   description: 'Delegate coding tasks to Claude Code CLI. Use for building features, refactoring, PR reviews, and iterative coding.',
   category: 'code',
   source: 'claude-code',
-  execute: async (params: Record<string, unknown>): Promise<ToolResult> => {
+  execute: async (params: Record<string, unknown>, context): Promise<ToolResult> => {
     const { command, task, workdir, maxTurns, allowedTools } = params;
 
     const cliAvailable = await safeExecute(
@@ -137,14 +143,14 @@ const claudeCodeTool: Tool = {
 
     if (!cliAvailable) {
       return {
-        success: true,
-        output: `[模拟模式] Claude Code 将执行:\n任务: ${task || command}\n工作目录: ${workdir || '/project'}\n最大轮次: ${maxTurns || 10}\n可用工具: ${allowedTools || 'all'}\n\n提示: Claude Code CLI 未安装，当前为模拟执行模式。`
+        success: false,
+        error: `Claude Code CLI 未安装，未执行任务：${task || command || '未指定任务'}（工作目录：${workdir || '/project'}，最大轮次：${maxTurns || 10}，工具：${allowedTools || 'all'}）`
       };
     }
 
     try {
       const prompt: string = (task as string) || (command as string) || 'Complete the coding task';
-      const result = await claudeChat(prompt);
+      const result = await claudeChat(prompt, [], { signal: context?.signal });
 
       if (result.success) {
         return { success: true, output: result.output };
@@ -164,7 +170,7 @@ const webSearchTool: Tool = {
   description: 'Search the web for information. Use for researching technologies, finding documentation, company news, and gathering context.',
   category: 'search',
   source: 'hermes',
-  execute: async (params: Record<string, unknown>): Promise<ToolResult> => {
+  execute: async (params: Record<string, unknown>, context): Promise<ToolResult> => {
     // 优先使用params.query，其次使用params.task（从executeStep传入），最后使用action描述
     const query = (params.query as string) || (params.task as string) || '未指定搜索关键词';
     const numResults = (params.numResults as number) || 5;
@@ -175,6 +181,7 @@ const webSearchTool: Tool = {
         query,
         numResults,
         searchType,
+        signal: context?.signal,
       });
 
       if (!response.success) {
@@ -190,7 +197,7 @@ const webSearchTool: Tool = {
 
       return {
         success: true,
-        output: `[Web Search] 搜索查询: ${query}\n\n找到 ${response.results.length} 条结果:\n\n${resultsText}`
+        output: `${response.isMock ? '⚠️ [演示数据，非真实联网结果]\n\n' : ''}[Web Search] 搜索查询: ${query}\n\n找到 ${response.results.length} 条结果:\n\n${resultsText}`
       };
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : '搜索服务异常';
@@ -209,7 +216,7 @@ const companyResearchTool: Tool = {
   description: 'Research company background information including news, industry trends, and patent information. Use for due diligence on enterprises.',
   category: 'search',
   source: 'hermes',
-  execute: async (params: Record<string, unknown>): Promise<ToolResult> => {
+  execute: async (params: Record<string, unknown>, context): Promise<ToolResult> => {
     // 优先使用params.companyName，其次使用params.task
     const companyName = (params.companyName as string) || (params.task as string);
 
@@ -221,7 +228,11 @@ const companyResearchTool: Tool = {
     }
 
     try {
-      const result = await searchService.researchCompany(companyName);
+      const result = await searchService.researchCompany(companyName, context?.signal);
+
+      if (result.success === false) {
+        return { success: false, error: result.error || '企业背景调查失败' };
+      }
 
       // 格式化新闻
       const newsText = result.news.length > 0
@@ -241,7 +252,7 @@ const companyResearchTool: Tool = {
         .join('\n\n')
         : '暂无专利信息';
 
-      let output = `# 企业背景调查报告: ${companyName}\n\n`;
+      let output = `${result.isMock ? '⚠️ **演示数据，非真实企业信息**\n\n' : ''}# 企业背景调查报告: ${companyName}\n\n`;
 
       if (result.basicInfo) {
         output += `## 基本信息\n`;
@@ -344,6 +355,32 @@ Format your response as a structured plan.`;
       return { success: false, error: formatErrorMessage(error) };
     }
   }
+};
+
+// Session Search Tool - compatible with Hermes Agent v0.19 session_search
+const sessionSearchTool: Tool = {
+  id: 'session-search',
+  name: 'session_search',
+  description: 'Search locally stored conversation sessions for relevant prior context.',
+  category: 'system',
+  source: 'hermes',
+  execute: async (params: Record<string, unknown>): Promise<ToolResult> => {
+    const query = String(params.query || params.task || '').trim();
+    if (!query) return { success: false, error: '未指定会话搜索关键词' };
+
+    const requestedLimit = Number(params.limit);
+    const limit = Number.isFinite(requestedLimit) ? requestedLimit : 5;
+    const hits = hermesSessionMemory.search(query, limit);
+    if (hits.length === 0) {
+      return { success: true, output: `未找到与“${query}”相关的历史会话。` };
+    }
+
+    const output = hits.map((hit, index) => {
+      const excerpt = hit.message.content.replace(/\s+/g, ' ').slice(0, 500);
+      return `${index + 1}. [${hit.message.timestamp}] ${excerpt}`;
+    }).join('\n');
+    return { success: true, output: `会话搜索“${query}”找到 ${hits.length} 条结果：\n${output}` };
+  },
 };
 
 // OpenClaw Skill Tool - dispatches to OpenClaw skills
@@ -886,7 +923,7 @@ export class HermesAgent {
 
     // Initialize state
     this.state = {
-      sessionId: uuidv4(),
+      sessionId: hermesSessionMemory.getMostRecentSessionId() || uuidv4(),
       tasks: [],
       plan: [],
       executionLog: [],
@@ -932,6 +969,7 @@ export class HermesAgent {
       companyResearchTool,
       documentAnalysisTool,
       taskPlanningTool,
+      sessionSearchTool,
       openClawSkillTool,
       nativeSkillTool,
       policyQATool,
@@ -988,7 +1026,11 @@ export class HermesAgent {
    * @param toolId 工具ID（支持短横线和下划线格式）
    * @param params 工具参数
    */
-  async executeTool(toolId: string, params: Record<string, unknown>): Promise<ToolResult> {
+  async executeTool(
+    toolId: string,
+    params: Record<string, unknown>,
+    signal?: AbortSignal
+  ): Promise<ToolResult> {
     this.ensureInitialized();
 
     // 规范化工具名称
@@ -1014,7 +1056,7 @@ export class HermesAgent {
     }
 
     try {
-      const result = await tool.execute(params);
+      const result = await tool.execute(params, { signal });
       return result;
     } catch (error: unknown) {
       return { success: false, error: formatErrorMessage(error) };
@@ -1038,17 +1080,20 @@ export class HermesAgent {
       const nativeSkills = getBuiltInSkills();
       const openClawService = getOpenClawService();
       const openClawSkills = openClawService.getAllSkills();
+      const scientificSkills = scientificSkillService.getAllSkills();
 
       return {
         native: nativeSkills,
         openclaw: openClawSkills,
-        total: nativeSkills.length + openClawSkills.length
+        scientific: scientificSkills,
+        total: nativeSkills.length + openClawSkills.length + scientificSkills.length
       };
     } catch (error) {
       console.error('获取技能列表失败:', error);
       return {
         native: [],
         openclaw: [],
+        scientific: [],
         total: 0
       };
     }
@@ -1116,11 +1161,10 @@ export class HermesAgent {
     suggestedSkills: string[];
   } {
     try {
-      const openClaw = getOpenClawService();
       const matchedSkills: string[] = [];
 
-      // Check for OpenClaw skill triggers
-      const allSkills = [...getBuiltInSkills(), ...openClaw.getAllSkills()];
+      // Check triggers across every enabled skill source.
+      const allSkills = unifiedSkillService.getAllSkills().map((item) => item.skill);
       for (const skill of allSkills) {
         if (skill.triggers?.some(t => demand.toLowerCase().includes(t.toLowerCase()))) {
           matchedSkills.push(skill.name);
@@ -1434,12 +1478,17 @@ export class HermesAgent {
     const tierConfig = TIER_CONFIGS[tier];
 
     // 通过 SkillInjector 获取相关技能内容
-    const allSkills = unifiedSkillService.getAllSkills().map(u => u.skill);
-    const injection = skillInjector.inject(allSkills, userTask);
+    const allSkillItems = unifiedSkillService.getAllSkills();
+    const generalSkills = allSkillItems
+      .filter((item) => item.source !== 'scientific')
+      .map((item) => item.skill);
+    const injection = skillInjector.inject(generalSkills, userTask);
+    const scientificContext = scientificSkillService.buildContext(userTask, 'chat');
+    const skillContent = [injection.rendered, scientificContext.rendered].filter(Boolean).join('\n\n');
 
     return runToolLoop(userTask, tierConfig, {
       systemPrompt: tierConfig.systemPromptPrefix,
-      skillContent: injection.rendered || undefined,
+      skillContent: skillContent || undefined,
     });
   }
 }

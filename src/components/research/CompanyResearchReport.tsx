@@ -3,24 +3,8 @@
  * 用于展示联网检索到的企业信息
  */
 
-import { SearchResult } from '@/services/search/types';
-import { themes, useThemeStore } from '@/store/themeStore';
-
-interface CompanyResearchResult {
-  companyName: string;
-  basicInfo?: {
-    registrationNumber?: string;
-    legalRepresentative?: string;
-    registeredCapital?: string;
-    establishmentDate?: string;
-    businessStatus?: string;
-    mainBusiness?: string;
-  };
-  news: SearchResult[];
-  patents?: SearchResult[];
-  competitors?: SearchResult[];
-  industryNews: SearchResult[];
-}
+import type { CompanyResearchResult } from '@/services/search/types';
+import { useThemeColors } from '@/store/themeStore';
 
 interface CompanyResearchReportProps {
   research: CompanyResearchResult;
@@ -28,8 +12,7 @@ interface CompanyResearchReportProps {
 }
 
 export function CompanyResearchReport({ research, isLoading }: CompanyResearchReportProps) {
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   if (isLoading) {
     return (
@@ -52,8 +35,37 @@ export function CompanyResearchReport({ research, isLoading }: CompanyResearchRe
     return null;
   }
 
+  if (research.success === false) {
+    return (
+      <div
+        className="rounded-xl p-5"
+        style={{
+          color: themeColors?.error,
+          backgroundColor: themeColors?.error + '12',
+          border: `1px solid ${themeColors?.error}`,
+        }}
+      >
+        <h3 className="font-semibold">企业调查未完成</h3>
+        <p className="text-sm mt-2">{research.error || '联网检索失败，请稍后重试。'}</p>
+        {research.provider && <p className="text-xs mt-2 opacity-80">数据来源：{research.provider}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {research.isMock && (
+        <div
+          className="rounded-lg px-4 py-3 text-sm"
+          style={{
+            color: themeColors?.warning,
+            backgroundColor: themeColors?.warning + '12',
+            border: `1px solid ${themeColors?.warning}`,
+          }}
+        >
+          ⚠️ 当前为演示数据，非真实联网检索结果，不能作为企业尽调结论。
+        </div>
+      )}
       {/* 报告标题 */}
       <div
         className="rounded-xl p-4"

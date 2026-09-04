@@ -1,70 +1,201 @@
 .about-settings-container {
-  padding: 16px 0;
-}
-
-.about-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 16px;
-}
-
-.version-form {
+  margin-bottom: 14px;
   padding: 20px;
-}
-
-.form-item {
-  margin-bottom: 16px;
-}
-
-.form-item label {
-  display: block;
-  font-size: 13px;
-  margin-bottom: 6px;
-}
-
-.version-input,
-.version-textarea {
-  width: 100%;
-  padding: 10px 12px;
   border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  box-sizing: border-box;
+  box-shadow: 0 6px 20px rgba(36, 104, 164, 0.04);
 }
 
-.version-input:focus,
-.version-textarea:focus {
-  border-color: var(--color-primary, #0ea5e9);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+.about-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.version-textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
-.readonly-text {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.save-btn {
-  padding: 10px 24px;
+.about-heading-icon,
+.hermes-agent-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
   border-radius: 8px;
-  border: none;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.2s;
 }
 
-.save-btn:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
+.about-heading-icon {
+  width: 30px;
+  height: 30px;
 }
 
-.about-hint {
-  margin-top: 12px;
+.about-heading-copy {
+  min-width: 0;
+}
+
+.about-heading-copy h3,
+.hermes-summary h4 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.about-heading-copy h3 {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.about-heading-copy p,
+.hermes-summary p {
+  margin: 2px 0 0;
   font-size: 12px;
+}
+
+.about-status,
+.hermes-integrated-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 9px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.about-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.about-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 18px 0;
+  border-top: 1px solid;
+  border-bottom: 1px solid;
+}
+
+.about-fact {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 14px;
+}
+
+.about-fact + .about-fact {
+  border-left: 1px solid var(--color-border);
+}
+
+.about-fact svg {
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.about-fact span {
+  font-size: 11px;
+}
+
+.about-fact strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hermes-integration {
+  padding: 16px;
+  border: 1px solid;
+  border-radius: 8px;
+}
+
+.hermes-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hermes-agent-icon {
+  width: 40px;
+  height: 40px;
+  box-shadow: 0 3px 12px rgba(36, 104, 164, 0.08);
+}
+
+.hermes-summary h4 {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.hermes-capabilities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin-top: 14px;
+  padding-left: 50px;
+}
+
+.hermes-capabilities span {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.hermes-capabilities svg {
+  flex: 0 0 auto;
+}
+
+.release-notes {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid;
+}
+
+.release-notes summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.release-notes ul {
+  max-height: 220px;
+  margin: 10px 0 0 20px;
+  padding-right: 8px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+@media (max-width: 640px) {
+  .about-settings-container {
+    padding: 16px;
+  }
+
+  .about-status {
+    display: none;
+  }
+
+  .about-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .about-fact + .about-fact {
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+
+  .hermes-summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .hermes-integrated-badge {
+    margin-left: 50px;
+  }
+
+  .hermes-capabilities {
+    grid-template-columns: 1fr;
+    padding-left: 0;
+  }
 }

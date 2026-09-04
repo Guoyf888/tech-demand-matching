@@ -4,12 +4,11 @@
 
 import { useState } from 'react';
 import { useGlobalModelConfig, ModelType } from '@/config/modelConfig';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
 
 export function ModelSettings() {
   const { modelConfigs, setDefaultModel, getDefaultModel, updateModelConfig } = useGlobalModelConfig();
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   const [editingKey, setEditingKey] = useState<string>('');
   const [editingUrl, setEditingUrl] = useState<string>('');

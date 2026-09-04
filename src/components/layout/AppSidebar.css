@@ -233,3 +233,74 @@
 .app-sidebar.collapsed .nav-item[title] {
   position: relative;
 }
+
+@media (max-width: 768px) {
+  .app-sidebar,
+  .app-sidebar.collapsed {
+    top: auto;
+    bottom: 0;
+    width: 100% !important;
+    height: 68px;
+    border-top: 1px solid var(--color-border);
+    border-right: 0;
+    box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.08);
+  }
+
+  .sidebar-logo,
+  .sidebar-footer,
+  .nav-children {
+    display: none;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    gap: 2px;
+    padding: 6px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .sidebar-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-item-wrapper {
+    flex: 1 1 0;
+    min-width: 58px;
+    margin: 0;
+  }
+
+  .nav-item,
+  .app-sidebar.collapsed .nav-item {
+    min-height: 54px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 5px 4px;
+    text-align: center;
+  }
+
+  .nav-item-label {
+    width: 100%;
+    flex: 0 0 auto;
+    font-size: 10px;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .nav-item-arrow {
+    display: none;
+  }
+
+  .active-indicator {
+    top: auto;
+    right: 18px;
+    bottom: 0;
+    left: 18px;
+    width: auto;
+    height: 3px;
+    transform: none;
+    border-radius: 3px 3px 0 0;
+  }
+}

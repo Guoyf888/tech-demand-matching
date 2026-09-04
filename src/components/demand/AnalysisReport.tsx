@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { Demand } from '@/types';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
+import { FlaskConical } from 'lucide-react';
 
 interface AnalysisReportProps {
   demand: Demand;
 }
 
 export function AnalysisReport({ demand }: AnalysisReportProps) {
-  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
   const contentRef = useRef<HTMLDivElement>(null);
 
   // 确保内容区域可以滚动
@@ -67,6 +67,29 @@ export function AnalysisReport({ demand }: AnalysisReportProps) {
             >
               正在调用AI分析您的需求，请稍候
             </p>
+          </div>
+        </div>
+      )}
+
+      {demand.analysis.skills && demand.analysis.skills.length > 0 && (
+        <div
+          className="rounded-xl p-4"
+          style={{ backgroundColor: themeColors?.primaryLight, border: `1px solid ${themeColors?.primary}30` }}
+        >
+          <div className="flex items-center gap-2 text-sm font-medium" style={{ color: themeColors?.primary }}>
+            <FlaskConical size={16} aria-hidden="true" />
+            <span>本次采用的科研方法</span>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {demand.analysis.skills.map((skill) => (
+              <span
+                key={skill}
+                className="px-2 py-1 rounded text-xs"
+                style={{ color: themeColors?.textSecondary, backgroundColor: themeColors?.surface }}
+              >
+                {skill}
+              </span>
+            ))}
           </div>
         </div>
       )}

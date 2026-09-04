@@ -5,23 +5,27 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { apiGateway } from '@/services/api/gateway';
+import { streamChat } from '@/services/api/gateway';
 import { useApiStore } from '@/store/apiStore';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { PROVIDER_META, type Provider } from '@/config/providers';
+import { useThemeColors } from '@/store/themeStore';
 import { v4 as uuidv4 } from 'uuid';
 import { claudeChat, isClaudeCodeInstalled, type ClaudeCodeResponse } from '@/services/claudeCode';
 import { getHermesAgent } from '@/services/hermes/HermesAgent';
 import { getHermesSkillsService } from '@/services/hermes/HermesSkillsService';
-import { getTechMatchAgent } from '@/services/hermes/TechMatchAgent';
+import type { TechMatchAgent } from '@/services/hermes/TechMatchAgent';
 import { unifiedSkillService } from '@/services/skills/UnifiedSkillService';
 import { getIntentClassifier } from '@/services/hermes/IntentClassifier';
 import { getSkillExecutionBridge } from '@/services/hermes/SkillExecutionBridge';
 import { skillInjector } from '@/services/skills/SkillInjector';
+import { scientificSkillService } from '@/services/skills/scientificSkills';
 import { selectTier } from '@/services/hermes/AgentTier';
+import { hermesSessionMemory } from '@/services/hermes/SessionMemory';
 import {
   Bot, Sparkles, Zap, Lightbulb,
-  FileText, Code, Upload, File, X, CheckCircle2,
-  Target, Users, GitBranch, Cpu
+  Code, Upload, File, X, CheckCircle2,
+  Target, Users, GitBranch, Cpu, SendHorizontal, Trash2,
+  Search, ClipboardCheck, Handshake, ChevronRight, SlidersHorizontal
 } from 'lucide-react';
 import { parseDocument, detectContentType, extractIndustryTags, extractTechTags } from '@/services/documentParser';
 import { MessageItem } from './MessageItem';
@@ -48,27 +52,48 @@ interface UnifiedMessage {
 
 // ==================== 常量 ====================
 
-const modelOptions = [
-  { id: 'openai', name: 'OpenAI GPT-4' },
-  { id: 'claude', name: 'Claude 3.5' },
-  { id: 'qwen', name: '阿里 Qwen' },
-  { id: 'ernie', name: '百度 文心一言' },
-  { id: 'zhipu', name: '智谱 GLM-4' },
-  { id: 'minimax', name: 'MiniMax' },
-  { id: 'kimi', name: 'Kimi' },
-  { id: 'openrouter', name: 'OpenRouter' },
+const providerOptions = Object.values(PROVIDER_META);
+
+const modeOptions: Array<{ id: ChatMode; name: string }> = [
+  { id: 'chat', name: 'AI 对话' },
+  { id: 'hermes', name: 'Hermes 任务' },
+  { id: 'smart-agent', name: '智能分析' },
+  { id: 'terminal', name: 'Claude 终端' },
 ];
+
+const starterPrompts = [
+  {
+    title: '帮我分析一项技术需求',
+    description: '梳理应用场景、目标与关键技术难点',
+    prompt: '请帮我分析一项技术需求，包括应用场景、目标、技术难点和可行路径。',
+    icon: ClipboardCheck,
+  },
+  {
+    title: '根据需求匹配技术成果',
+    description: '生成匹配维度与成果对接建议',
+    prompt: '请根据我的技术需求匹配合适的技术成果，并说明匹配依据和对接建议。',
+    icon: Handshake,
+  },
+  {
+    title: '评估科技成果的转化价值',
+    description: '判断成熟度、应用方向与转化风险',
+    prompt: '请评估一项科技成果的转化价值，包括成熟度、应用方向、市场潜力和主要风险。',
+    icon: Lightbulb,
+  },
+] as const;
 
 // ==================== 主组件 ====================
 
 export function AIAgentChat() {
+  const sessionIdRef = useRef(getHermesAgent().getSessionId());
   const [mode, setMode] = useState<ChatMode>('chat');
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   // 模型选择 - 从localStorage恢复上次成功使用的模型
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem('lastSuccessfulModel') || 'openai';
+  const [selectedModel, setSelectedModel] = useState<Provider>(() => {
+    const storedProvider = localStorage.getItem('lastSuccessfulModel');
+    return storedProvider && storedProvider in PROVIDER_META ? storedProvider as Provider : 'openai';
   });
 
   const [executionState, setExecutionState] = useState<ExecutionState>({ status: 'idle' });
@@ -81,7 +106,13 @@ export function AIAgentChat() {
   const [cliAvailable, setCliAvailable] = useState<boolean | null>(null);
 
   // Unified message list - React不可变更新
-  const [messages, setMessages] = useState<UnifiedMessage[]>([]);
+  const [messages, setMessages] = useState<UnifiedMessage[]>(() => {
+    const saved = hermesSessionMemory.getSession(sessionIdRef.current);
+    return (saved?.messages || []).filter(message => (
+      ['user', 'ai', 'hermes-plan', 'hermes-result', 'terminal', 'system', 'tech-result']
+        .includes(message.type)
+    )) as UnifiedMessage[];
+  });
 
   // 智能Agent模式状态
   const [agentMode, setAgentMode] = useState<'demand' | 'result' | 'matching' | 'team'>('demand');
@@ -93,15 +124,18 @@ export function AIAgentChat() {
   const [documentPreview, setDocumentPreview] = useState<{ text: string; type: string; industries: string[]; techs: string[] } | null>(null);
 
   // 主动技能推荐状态
-  const [suggestedSkill, setSuggestedSkill] = useState<{ name: string; description: string } | null>(null);
+  const [suggestedSkill, setSuggestedSkill] = useState<{
+    name: string;
+    description: string;
+    source: 'scientific' | 'general';
+  } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const terminalInputRef = useRef<HTMLInputElement>(null);
 
   const { activeProvider, setActiveProvider } = useApiStore();
-  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   const stats = unifiedSkillService.getStats();
 
@@ -125,11 +159,21 @@ export function AIAgentChat() {
       return;
     }
     const timer = setTimeout(() => {
+      const scientificRecommended = scientificSkillService.recommendSkills(input, 'chat', 1);
+      if (scientificRecommended.length > 0) {
+        setSuggestedSkill({
+          name: scientificRecommended[0].name,
+          description: scientificRecommended[0].description,
+          source: 'scientific',
+        });
+        return;
+      }
       const recommended = unifiedSkillService.recommendSkills(input, 1);
       if (recommended.length > 0 && recommended[0].matchScore >= 30) {
         setSuggestedSkill({
           name: recommended[0].skill.name,
           description: recommended[0].skill.description,
+          source: 'general',
         });
       } else {
         setSuggestedSkill(null);
@@ -151,6 +195,10 @@ export function AIAgentChat() {
   }, [messages, terminalLines]);
 
   useEffect(() => {
+    hermesSessionMemory.saveSession(sessionIdRef.current, messages);
+  }, [messages]);
+
+  useEffect(() => {
     inputRef.current?.focus();
   }, [mode]);
 
@@ -163,6 +211,31 @@ export function AIAgentChat() {
       timestamp: new Date().toISOString()
     };
     setMessages(prev => [...prev, newMessage]);
+    return newMessage.id;
+  }, []);
+
+  // 流式追加：先插入空消息，再按 chunk 累加 content
+  const appendUnifiedMessage = useCallback((initialContent: string): string => {
+    const id = uuidv4();
+    setMessages(prev => [...prev, {
+      id,
+      type: 'ai',
+      content: initialContent,
+      timestamp: new Date().toISOString(),
+    }]);
+    return id;
+  }, []);
+
+  const patchUnifiedMessage = useCallback((id: string, content: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
+  }, []);
+
+  const clearConversation = useCallback(() => {
+    hermesSessionMemory.clearSession(sessionIdRef.current);
+    setMessages([]);
+    const hermes = getHermesAgent();
+    hermes.reset();
+    sessionIdRef.current = hermes.getSessionId();
   }, []);
 
   // Process with Hermes - Hermes作为唯一调度核心
@@ -302,12 +375,16 @@ export function AIAgentChat() {
 
     try {
       if (selectedModel !== activeProvider) {
-        setActiveProvider(selectedModel as typeof activeProvider);
+        setActiveProvider(selectedModel);
       }
 
       // 使用 SkillInjector 进行 3-tier 技能注入（OpenHuman 模式）
-      const allSkills = unifiedSkillService.getAllSkills().map(u => u.skill);
-      const injection = skillInjector.inject(allSkills, userInput);
+      const allSkillItems = unifiedSkillService.getAllSkills();
+      const generalSkills = allSkillItems
+        .filter((item) => item.source !== 'scientific')
+        .map((item) => item.skill);
+      const injection = skillInjector.inject(generalSkills, userInput);
+      const scientificContext = scientificSkillService.buildContext(userInput, 'chat');
 
       let systemPrompt = `你是技术经理人的AI助手，可以帮助分析技术需求、技术成果，提供创新建议，促成技术对接。用专业但易懂的语言回答。`;
 
@@ -316,19 +393,39 @@ export function AIAgentChat() {
       } else {
         // 降级：当 SkillInjector 无匹配时，保留原有技能上下文
         const skillPrompt = unifiedSkillService.generateSkillContext();
-        systemPrompt += skillPrompt;
+        systemPrompt += '\n\n' + skillPrompt;
       }
 
-      const response = await apiGateway.chat({
+      if (scientificContext.rendered) {
+        systemPrompt += '\n\n' + scientificContext.rendered;
+      }
+
+      // 流式渲染：先插入空消息，逐 chunk 累加
+      const streamId = appendUnifiedMessage('');
+      let acc = '';
+      const recentHistory = messages
+        .filter(message => message.type === 'user' || message.type === 'ai')
+        .slice(-12)
+        .map(message => ({
+          role: message.type === 'user' ? 'user' as const : 'assistant' as const,
+          content: message.content,
+        }));
+      const handle = streamChat({
         messages: [
           { role: 'system', content: systemPrompt },
+          ...recentHistory,
           { role: 'user', content: userInput },
         ],
       });
-
-      const data = await response.json();
-      const assistantContent = data.choices?.[0]?.message?.content || '抱歉，我暂时无法回答这个问题。';
-      addUnifiedMessage('ai', assistantContent);
+      try {
+        for await (const chunk of handle) {
+          acc += chunk;
+          patchUnifiedMessage(streamId, acc);
+        }
+      } finally {
+        handle.abort();
+      }
+      if (!acc) patchUnifiedMessage(streamId, '抱歉，我暂时无法回答这个问题。');
 
       // 成功调用后保存模型到localStorage
       localStorage.setItem('lastSuccessfulModel', selectedModel);
@@ -371,6 +468,7 @@ export function AIAgentChat() {
     addUnifiedMessage('user', taskDescription);
 
     try {
+      const { getTechMatchAgent } = await import('@/services/hermes/TechMatchAgent');
       const techMatch = getTechMatchAgent();
       const skillsService = getHermesSkillsService();
 
@@ -412,29 +510,33 @@ export function AIAgentChat() {
    * 智能需求分析 - 调用TechMatchAgent + HermesSkills
    */
   const executeSmartDemandAnalysis = async (
-    techMatch: ReturnType<typeof getTechMatchAgent>,
+    techMatch: TechMatchAgent,
     taskDescription: string,
     skillsService: ReturnType<typeof getHermesSkillsService>
   ): Promise<string> => {
     // 使用Hermes Skills进行增强分析
     const demandSkill = skillsService.getSkillByName('tech-demand-analysis');
+    const scientificContext = scientificSkillService.buildContext(taskDescription, 'demand');
 
     // 调用TechMatchAgent进行分析
     const analysis = await techMatch.analyzeDemand(taskDescription);
 
-    // 如果有Hermes Skill指导，使用AI进一步增强
-    if (demandSkill?.content) {
-      const enhancePrompt = `你是一个技术需求分析专家。请基于以下分析结果和技能指导，进一步完善分析。
+    // 使用 Hermes 与科研技能方法论进一步增强
+    if (demandSkill?.content || scientificContext.rendered) {
+      const enhancePrompt = `你是一个专业AI技术经理人。请基于以下分析结果和方法论，进一步完善技术需求分析。
 
 原始需求: ${taskDescription}
 
 初步分析:
 ${analysis.report}
 
-技能指导:
-${demandSkill.content}
+Hermes技能指导:
+${demandSkill?.content || '无'}
 
-请提供更深入的分析和改进建议。`;
+科学技能方法论:
+${scientificContext.rendered || '无'}
+
+请区分事实、推断和待验证假设，提供更深入的技术路线、验证方案、风险与改进建议。`;
 
       const enhancedResult = await claudeChat(enhancePrompt);
       if (enhancedResult.success && enhancedResult.output) {
@@ -448,15 +550,31 @@ ${demandSkill.content}
   /**
    * 智能成果分析
    */
-  const executeSmartResultAnalysis = async (techMatch: ReturnType<typeof getTechMatchAgent>, taskDescription: string): Promise<string> => {
+  const executeSmartResultAnalysis = async (techMatch: TechMatchAgent, taskDescription: string): Promise<string> => {
     const analysis = await techMatch.analyzeTechResult(taskDescription);
+    const scientificContext = scientificSkillService.buildContext(taskDescription, 'result');
+    if (scientificContext.rendered) {
+      const enhancedResult = await claudeChat(`你是一个专业AI技术经理人。请基于初步报告和科学技能方法论，评估成果的创新性、证据质量、技术成熟度、可复制性、应用边界和转化风险。
+
+原始成果:
+${taskDescription}
+
+初步报告:
+${analysis.report}
+
+科学技能方法论:
+${scientificContext.rendered}
+
+请明确区分已有证据、合理推断和仍需验证的结论，并给出下一步验证与转化建议。`);
+      if (enhancedResult.success && enhancedResult.output) return enhancedResult.output;
+    }
     return analysis.report;
   };
 
   /**
    * 智能双向匹配
    */
-  const executeSmartMatching = async (techMatch: ReturnType<typeof getTechMatchAgent>, taskDescription: string): Promise<string> => {
+  const executeSmartMatching = async (techMatch: TechMatchAgent, taskDescription: string): Promise<string> => {
     // 智能识别是需求还是成果
     const isDemand = taskDescription.match(/需要|寻求|希望|要求|开发|解决/);
     const isResult = taskDescription.match(/成果|技术|专利|方案|产品|研发/);
@@ -479,7 +597,7 @@ ${demandSkill.content}
   /**
    * 智能团队匹配
    */
-  const executeSmartTeamMatching = async (techMatch: ReturnType<typeof getTechMatchAgent>, taskDescription: string): Promise<string> => {
+  const executeSmartTeamMatching = async (techMatch: TechMatchAgent, taskDescription: string): Promise<string> => {
     const matchResult = await techMatch.matchTeam(taskDescription);
     return matchResult.report;
   };
@@ -540,6 +658,7 @@ ${demandSkill.content}
         addTerminalLine('system', `  自定义技能: ${skills.custom} 个`);
         addTerminalLine('system', `  OpenClaw技能: ${skills.openclaw} 个`);
         addTerminalLine('system', `  Hermes技能: ${skills.hermes} 个`);
+        addTerminalLine('system', `  科研技能: ${skills.scientific} 个`);
         addTerminalLine('system', `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       },
     },
@@ -664,13 +783,6 @@ ${demandSkill.content}
     }
   };
 
-  // Skills shortcut buttons
-  const handleSkillsAction = (skillName: string) => {
-    const skillStats = unifiedSkillService.getStats();
-    addUnifiedMessage('system', `📦 技能库: ${skillName}\n\n内置技能: ${skillStats.native} | 自定义技能: ${skillStats.custom} | OpenClaw: ${skillStats.openclaw} | Hermes: ${skillStats.hermes}`);
-    handleHermesTask(`请使用${skillName}技能处理当前需求`);
-  };
-
   // 文档上传处理
   const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -731,32 +843,68 @@ ${demandSkill.content}
         border: `1px solid ${themeColors?.border}`,
       }}
     >
-      {/* 顶部标题栏 */}
+      {/* 顶部助手栏 */}
       <div
         className="chat-header flex items-center px-4 py-3 gap-4 flex-shrink-0"
         style={{ borderBottom: `1px solid ${themeColors?.border}`, backgroundColor: themeColors?.backgroundAlt }}
       >
-        {/* 标题和模型选择器 */}
-        <div className="flex items-center gap-3">
-          <span className="text-xl">🤖</span>
-          <span className="text-lg font-semibold" style={{ color: themeColors?.text }}>AI对话</span>
+        <div className="chat-header-title flex items-center gap-3">
+          <span
+            className="assistant-brand-icon"
+            style={{ backgroundColor: themeColors?.primary, color: '#fff' }}
+          >
+            <Bot size={18} strokeWidth={1.8} aria-hidden="true" />
+          </span>
+          <span className="assistant-brand-copy">
+            <strong style={{ color: themeColors?.text }}>技术经理人 AI 助手</strong>
+            <small style={{ color: themeColors?.textHint }}>{stats.scientific} 项科研技能已就绪</small>
+          </span>
+        </div>
+
+        <div className="chat-header-controls">
+          <span className="chat-mode-control" style={{ color: themeColors?.textHint }}>
+            <SlidersHorizontal size={14} aria-hidden="true" />
+            <select
+              value={mode}
+              onChange={(event) => setMode(event.target.value as ChatMode)}
+              aria-label="选择助手模式"
+              style={{ color: themeColors?.text, backgroundColor: themeColors?.surface }}
+            >
+              {modeOptions.map((option) => (
+                <option key={option.id} value={option.id}>{option.name}</option>
+              ))}
+            </select>
+          </span>
           <select
             value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="px-3 py-1.5 rounded-lg text-sm outline-none cursor-pointer"
+            onChange={(e) => setSelectedModel(e.target.value as Provider)}
+            className="chat-model-select"
+            aria-label="选择模型提供商"
             style={{
               backgroundColor: themeColors?.surface,
               color: themeColors?.text,
               border: `1px solid ${themeColors?.border}`,
             }}
           >
-            {modelOptions.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
+            {providerOptions.map((provider) => (
+              <option key={provider.id} value={provider.id}>
+                {provider.name}
               </option>
             ))}
           </select>
         </div>
+        {messages.length > 0 && (
+          <button
+            type="button"
+            onClick={clearConversation}
+            className="chat-clear-button ml-auto flex items-center justify-center"
+            style={{ color: themeColors?.textSecondary, border: `1px solid ${themeColors?.border}` }}
+            aria-label="清空当前会话"
+            title="清空当前会话"
+          >
+            <Trash2 size={16} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {/* 统一的对话内容区域 */}
@@ -767,96 +915,93 @@ ${demandSkill.content}
             className="message-list h-full overflow-y-auto p-4 space-y-4"
             style={{ scrollbarWidth: 'thin', scrollbarColor: `${themeColors?.border} transparent` }}
           >
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                {/* 动画图标容器 */}
-                <div className="relative mb-8">
-                  <div className="w-24 h-24 rounded-full flex items-center justify-center"
-                    style={{ background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-ai-purple) 100%)' }}>
-                    {mode === 'chat' ? (
-                      <Bot size={40} className="text-white" strokeWidth={1.5} />
-                    ) : (
-                      <Sparkles size={40} className="text-white" strokeWidth={1.5} />
-                    )}
-                  </div>
-                  {/* 背景光晕 */}
-                  <div className="absolute inset-0 w-24 h-24 rounded-full animate-ping opacity-20"
-                    style={{ background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-ai-purple) 100%)' }} />
-                </div>
-
-                {/* 标题 */}
-                <h2 className="text-xl font-semibold mb-3" style={{ color: themeColors?.text }}>
-                  {mode === 'chat' ? '您好，我是技术经理人AI助手' : 'Hermes 任务规划模式'}
-                </h2>
-
-                {/* 描述 */}
-                <p className="text-sm mb-8 max-w-md" style={{ color: themeColors?.textSecondary }}>
-                  {mode === 'chat'
-                    ? '可以帮您分析技术需求、技术成果，提供创新建议，促成技术对接'
-                    : '自动调度 Claude Code、OpenClaw技能和内置技能完成任务规划'}
-                </p>
-
-                {/* 快捷功能入口 */}
-                {mode === 'chat' && (
-                  <div className="flex flex-wrap gap-3 justify-center max-w-lg">
-                    <button
-                      onClick={() => setInput('帮我分析一个技术需求')}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all hover:scale-105"
-                      style={{
-                        backgroundColor: themeColors?.surface,
-                        border: `1px solid ${themeColors?.border}`,
-                        color: themeColors?.textSecondary
-                      }}
-                    >
-                      <Lightbulb size={16} style={{ color: 'var(--color-primary)' }} />
-                      技术需求分析
-                    </button>
-                    <button
-                      onClick={() => setInput('上传技术成果有什么流程？')}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all hover:scale-105"
-                      style={{
-                        backgroundColor: themeColors?.surface,
-                        border: `1px solid ${themeColors?.border}`,
-                        color: themeColors?.textSecondary
-                      }}
-                    >
-                      <FileText size={16} style={{ color: 'var(--color-ai-purple)' }} />
-                      成果上传咨询
-                    </button>
-                    <button
-                      onClick={() => setInput('智能匹配能做什么？')}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all hover:scale-105"
-                      style={{
-                        backgroundColor: themeColors?.surface,
-                        border: `1px solid ${themeColors?.border}`,
-                        color: themeColors?.textSecondary
-                      }}
-                    >
-                      <Zap size={16} style={{ color: 'var(--color-warning)' }} />
-                      智能匹配介绍
-                    </button>
-                  </div>
-                )}
-
-                {mode === 'hermes' && (
-                  <div className="flex flex-col items-center gap-2">
-                    <p className="text-sm" style={{ color: themeColors?.primary }}>
-                      <Sparkles size={14} className="inline mr-1" />
-                      输入任务描述，点击下方按钮启动任务规划
+            {messages.length === 0 && mode === 'chat' && (
+              <div className="assistant-start">
+                <section
+                  className="assistant-welcome"
+                  style={{ backgroundColor: themeColors?.primaryLight }}
+                >
+                  <div className="assistant-welcome-copy">
+                    <span className="assistant-eyebrow" style={{ color: themeColors?.primary }}>
+                      技术成果转化助手
+                    </span>
+                    <h1 style={{ color: themeColors?.text }}>你好，我可以帮你推进技术对接</h1>
+                    <p style={{ color: themeColors?.textSecondary }}>
+                      从需求梳理、成果评估到供需匹配，直接描述你的目标即可。
                     </p>
-                    <div className="flex gap-3 mt-2">
-                      <div className="flex items-center gap-1 text-xs" style={{ color: themeColors?.textHint }}>
-                        <Code size={12} /> Claude Code
-                      </div>
-                      <div className="flex items-center gap-1 text-xs" style={{ color: themeColors?.textHint }}>
-                        <Zap size={12} /> OpenClaw
-                      </div>
-                      <div className="flex items-center gap-1 text-xs" style={{ color: themeColors?.textHint }}>
-                        <Bot size={12} /> 内置技能
-                      </div>
-                    </div>
                   </div>
-                )}
+                  <div
+                    className="assistant-robot"
+                    style={{ backgroundColor: themeColors?.surface, color: themeColors?.primary }}
+                    aria-hidden="true"
+                  >
+                    <Bot size={42} strokeWidth={1.55} />
+                    <span style={{ backgroundColor: themeColors?.success }} />
+                  </div>
+                </section>
+
+                <section className="starter-prompts" aria-label="推荐任务">
+                  <p className="starter-prompts-label" style={{ color: themeColors?.textSecondary }}>
+                    你可以从这些任务开始
+                  </p>
+                  <div className="starter-prompt-list">
+                    {starterPrompts.map((item) => {
+                      const PromptIcon = item.icon;
+                      return (
+                        <button
+                          key={item.title}
+                          type="button"
+                          className="starter-prompt"
+                          onClick={() => {
+                            setInput(item.prompt);
+                            requestAnimationFrame(() => inputRef.current?.focus());
+                          }}
+                          style={{ borderColor: themeColors?.border, backgroundColor: themeColors?.surface }}
+                        >
+                          <span
+                            className="starter-prompt-icon"
+                            style={{ color: themeColors?.primary, backgroundColor: themeColors?.primaryLight }}
+                          >
+                            <PromptIcon size={17} aria-hidden="true" />
+                          </span>
+                          <span className="starter-prompt-copy">
+                            <strong style={{ color: themeColors?.text }}>{item.title}</strong>
+                            <small style={{ color: themeColors?.textHint }}>{item.description}</small>
+                          </span>
+                          <ChevronRight size={17} style={{ color: themeColors?.textHint }} aria-hidden="true" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {messages.length === 0 && mode === 'hermes' && (
+              <div className="chat-empty-state hermes-empty-state flex flex-col items-center justify-center h-full text-center p-8">
+                <div
+                  className="hermes-empty-icon"
+                  style={{ color: themeColors?.primary, backgroundColor: themeColors?.primaryLight }}
+                >
+                  <Sparkles size={32} strokeWidth={1.6} aria-hidden="true" />
+                </div>
+                <h2 className="text-xl font-semibold mb-3" style={{ color: themeColors?.text }}>
+                  Hermes 任务规划
+                </h2>
+                <p className="text-sm mb-6 max-w-md" style={{ color: themeColors?.textSecondary }}>
+                  描述目标，Hermes 会规划步骤并调度可用工具执行。
+                </p>
+                <div className="flex gap-3 mt-2">
+                  <div className="flex items-center gap-1 text-xs" style={{ color: themeColors?.textHint }}>
+                    <Code size={12} /> Claude Code
+                  </div>
+                  <div className="flex items-center gap-1 text-xs" style={{ color: themeColors?.textHint }}>
+                    <Zap size={12} /> OpenClaw
+                  </div>
+                  <div className="flex items-center gap-1 text-xs" style={{ color: themeColors?.textHint }}>
+                    <Bot size={12} /> 内置技能
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1138,65 +1283,100 @@ ${demandSkill.content}
           </div>
         )}
 
-        {/* 技能库快捷按钮 - Chat模式 */}
+        {/* 高频任务入口 */}
         {mode === 'chat' && (
-          <div className="skills-btns">
+          <div className="assistant-tools" aria-label="快捷能力">
             <button
-              onClick={() => handleSkillsAction('代码审查')}
+              type="button"
+              onClick={() => {
+                setInput('请联网搜索与我的技术需求相关的最新成果、团队和行业信息。');
+                requestAnimationFrame(() => inputRef.current?.focus());
+              }}
               disabled={isLoading}
-              className="skills-btn"
+              className="assistant-tool"
             >
-              🔍 代码审查
+              <Search size={18} aria-hidden="true" />
+              <span><strong>AI 搜索</strong><small>检索成果与行业信息</small></span>
             </button>
             <button
-              onClick={() => handleSkillsAction('需求分析')}
+              type="button"
+              onClick={() => {
+                setMode('smart-agent');
+                setAgentMode('demand');
+              }}
               disabled={isLoading}
-              className="skills-btn"
+              className="assistant-tool"
             >
-              📋 需求分析
+              <ClipboardCheck size={18} aria-hidden="true" />
+              <span><strong>需求预判</strong><small>识别难点与可行路径</small></span>
             </button>
             <button
-              onClick={() => handleSkillsAction('方案生成')}
+              type="button"
+              onClick={() => {
+                setMode('smart-agent');
+                setAgentMode('matching');
+              }}
               disabled={isLoading}
-              className="skills-btn"
+              className="assistant-tool"
             >
-              💡 方案生成
-            </button>
-            <button
-              onClick={() => handleSkillsAction('联网搜索')}
-              disabled={isLoading}
-              className="skills-btn"
-            >
-              🌐 联网搜索
+              <Handshake size={18} aria-hidden="true" />
+              <span><strong>智能匹配</strong><small>对接需求与技术成果</small></span>
             </button>
           </div>
         )}
 
-        {/* 模式切换Tab */}
-        <div className="flex items-center gap-1 mt-3 px-1">
-          {[
-            { id: 'chat' as ChatMode, label: '💬 AI对话' },
-            { id: 'hermes' as ChatMode, label: '✨ Hermes' },
-            { id: 'smart-agent' as ChatMode, label: '🤖 智能Agent' },
-            { id: 'terminal' as ChatMode, label: '💻 Claude终端' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setMode(tab.id)}
-              className="mode-tab px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-              style={{
-                backgroundColor: mode === tab.id ? themeColors?.primary : 'transparent',
-                color: mode === tab.id ? '#fff' : themeColors?.textSecondary,
-                border: `1px solid ${mode === tab.id ? themeColors?.primary : themeColors?.border}`,
-              }}
-            >
-              {tab.label}
+        {documentFile && documentPreview && mode !== 'terminal' && (
+          <div
+            className="composer-notice"
+            style={{ backgroundColor: themeColors?.success + '12', color: themeColors?.text }}
+          >
+            <File size={14} style={{ color: themeColors?.success }} aria-hidden="true" />
+            <span className="truncate">{documentFile.name}</span>
+            <span style={{ color: themeColors?.textSecondary }}>({documentPreview.type})</span>
+            <button type="button" onClick={clearDocument} aria-label="移除已上传文档">
+              <X size={13} aria-hidden="true" />
             </button>
-          ))}
-        </div>
+          </div>
+        )}
 
-        {/* 输入框和发送按钮 */}
-        <div className="flex gap-3 mt-3">
+        {suggestedSkill && mode === 'chat' && (
+          <div
+            className="composer-notice skill-notice"
+            style={{ backgroundColor: `${themeColors?.primary}12`, color: themeColors?.text }}
+          >
+            <Sparkles size={13} style={{ color: themeColors?.primary }} aria-hidden="true" />
+            <span>{suggestedSkill.source === 'scientific' ? '科研技能' : '推荐技能'}：<strong>{suggestedSkill.name}</strong></span>
+            <button
+              type="button"
+              className="skill-use-button"
+              onClick={async () => {
+                const bridge = getSkillExecutionBridge();
+                const result = await bridge.execute(
+                  { intent: 'skill-execution', confidence: 1, matchedSkill: suggestedSkill.name },
+                  input
+                );
+                if (result?.success) {
+                  addUnifiedMessage('user', input);
+                  addUnifiedMessage('ai', `🔧 [${result.skillOrToolName}]\n\n${result.output}`);
+                  setInput('');
+                  setSuggestedSkill(null);
+                }
+              }}
+              style={{ backgroundColor: themeColors?.primary, color: '#fff' }}
+            >
+              使用
+            </button>
+            <button type="button" onClick={() => setSuggestedSkill(null)} aria-label="忽略技能推荐">
+              <X size={12} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
+        {/* 紧凑输入组件 */}
+        <div
+          className={`chat-composer-shell ${mode === 'terminal' ? 'terminal-composer' : ''}`}
+          style={{ backgroundColor: themeColors?.surface, borderColor: themeColors?.border }}
+        >
           {mode === 'terminal' ? (
             <input
               ref={terminalInputRef}
@@ -1205,32 +1385,27 @@ ${demandSkill.content}
               onChange={(e) => setTerminalInput(e.target.value)}
               onKeyDown={handleTerminalKeyDown}
               disabled={isLoading}
-              className="chat-input flex-1"
-              style={{
-                backgroundColor: '#0d1117',
-                color: '#e0e0e0',
-                border: '1px solid #30363d',
-              }}
+              className="chat-input"
+              style={{ backgroundColor: '#0d1117', color: '#e0e0e0' }}
               placeholder={isLoading ? 'Processing...' : 'Type a command...'}
             />
           ) : (
             <>
-              {/* 文档上传按钮 */}
               <label
-                className="flex items-center justify-center px-3 rounded-lg cursor-pointer transition-all hover:scale-105"
+                className="chat-upload-button"
                 style={{
-                  backgroundColor: documentFile ? themeColors?.success + '20' : themeColors?.surface,
-                  border: `1px solid ${documentFile ? themeColors?.success : themeColors?.border}`,
                   color: documentFile ? themeColors?.success : themeColors?.textSecondary,
+                  backgroundColor: documentFile ? themeColors?.success + '14' : themeColors?.backgroundAlt,
                 }}
-                title="上传WORD/PDF文档，智能识别内容"
+                title="上传 Word 或 PDF 文档"
+                aria-label="上传 Word 或 PDF 文档"
               >
                 {documentLoading ? (
-                  <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${themeColors?.primary} transparent transparent transparent` }} />
+                  <span className="composer-spinner" style={{ borderTopColor: themeColors?.primary }} />
                 ) : documentFile ? (
-                  <CheckCircle2 size={18} />
+                  <CheckCircle2 size={18} aria-hidden="true" />
                 ) : (
-                  <Upload size={18} />
+                  <Upload size={18} aria-hidden="true" />
                 )}
                 <input
                   type="file"
@@ -1241,109 +1416,40 @@ ${demandSkill.content}
                 />
               </label>
 
-              {/* 已上传文档预览 */}
-              {documentFile && documentPreview && (
-                <div
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
-                  style={{
-                    backgroundColor: themeColors?.success + '15',
-                    border: `1px solid ${themeColors?.success}`,
-                    color: themeColors?.text,
-                  }}
-                >
-                  <File size={14} style={{ color: themeColors?.success }} />
-                  <span className="truncate max-w-32">{documentFile.name}</span>
-                  <span style={{ color: themeColors?.textSecondary }}>({documentPreview.type})</span>
-                  <button
-                    onClick={clearDocument}
-                    className="ml-1 p-0.5 rounded hover:bg-black/10"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              )}
-
-              {/* 主动技能推荐提示 */}
-              {suggestedSkill && mode === 'chat' && (
-                <div
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs mb-1"
-                  style={{
-                    backgroundColor: `${themeColors?.primary}15`,
-                    border: `1px solid ${themeColors?.primary}30`,
-                  }}
-                >
-                  <Sparkles size={12} style={{ color: themeColors?.primary }} />
-                  <span style={{ color: themeColors?.text }}>
-                    检测到技能: <strong>{suggestedSkill.name}</strong>
-                    <span style={{ color: themeColors?.textSecondary }}> - {suggestedSkill.description.slice(0, 30)}</span>
-                  </span>
-                  <button
-                    onClick={async () => {
-                      const bridge = getSkillExecutionBridge();
-                      const result = await bridge.execute(
-                        { intent: 'skill-execution', confidence: 1, matchedSkill: suggestedSkill.name },
-                        input
-                      );
-                      if (result?.success) {
-                        addUnifiedMessage('user', input);
-                        addUnifiedMessage('ai', `🔧 [${result.skillOrToolName}]\n\n${result.output}`);
-                        setInput('');
-                        setSuggestedSkill(null);
-                      }
-                    }}
-                    className="ml-auto px-2 py-0.5 rounded text-xs font-medium"
-                    style={{ backgroundColor: themeColors?.primary, color: '#fff' }}
-                  >
-                    使用
-                  </button>
-                  <button
-                    onClick={() => setSuggestedSkill(null)}
-                    className="px-1 py-0.5 rounded text-xs"
-                    style={{ color: themeColors?.textSecondary }}
-                  >
-                    <X size={10} />
-                  </button>
-                </div>
-              )}
-
               <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => { setInput(e.target.value); adjustTextareaHeight(e); }}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                mode === 'hermes'
-                  ? '输入任务描述，按 Enter 发送，Shift+Enter 换行...'
-                  : mode === 'smart-agent'
-                  ? '输入需求/成果描述，AI一键分析...'
-                  : '输入问题，按 Enter 发送，Shift+Enter 换行...'
-              }
-              className="chat-input flex-1"
-              rows={4}
-                style={{
-                  minHeight: '80px',
-                  maxHeight: '160px',
-                  height: '80px',
-                  resize: 'vertical',
-                  overflowY: 'auto',
-                }}
+                ref={inputRef}
+                value={input}
+                onChange={(e) => { setInput(e.target.value); adjustTextareaHeight(e); }}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  mode === 'hermes'
+                    ? '描述需要 Hermes 完成的任务...'
+                    : mode === 'smart-agent'
+                    ? '输入需要分析的需求或成果...'
+                    : '请描述你的技术需求、成果或对接目标...'
+                }
+                className="chat-input"
+                rows={1}
               />
             </>
           )}
           <button
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading || agentLoading}
-            className="send-btn"
-            style={{
-              backgroundColor: mode === 'smart-agent' ? '#9333EA' : themeColors?.primary,
-            }}
+            type="button"
+            onClick={() => mode === 'terminal' ? handleTerminalCommand(terminalInput) : handleSend()}
+            disabled={mode === 'terminal'
+              ? !terminalInput.trim() || isLoading
+              : !input.trim() || isLoading || agentLoading}
+            className="send-btn chat-send-button"
+            style={{ backgroundColor: themeColors?.primary }}
+            aria-label={agentLoading ? '正在分析' : '发送'}
+            title={agentLoading ? '正在分析' : '发送'}
           >
-            {agentLoading ? '分析中...' : '发送'}
+            <SendHorizontal size={17} aria-hidden="true" />
           </button>
         </div>
 
         {/* 提示信息 */}
-        <div className="mt-2 text-xs text-center" style={{ color: themeColors?.textHint }}>
+        <div className="assistant-disclaimer mt-2 text-xs text-center" style={{ color: themeColors?.textHint }}>
           {mode === 'chat' && 'AI 助手可能会产生不准确的信息，请以实际验证为准'}
           {mode === 'hermes' && 'Hermes会自动分析需求、制定计划并调用Claude Code/OpenClaw/内置技能执行'}
           {mode === 'smart-agent' && '智能Agent融合hermes-agent技能系统，一键完成需求/成果/团队分析'}

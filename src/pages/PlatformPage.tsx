@@ -1,10 +1,10 @@
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { MatchPanel } from '@/components/platform/MatchPanel';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
+import { Target } from 'lucide-react';
 
 export function PlatformPage() {
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   return (
     <div className="flex flex-col h-full gap-4" style={{ minHeight: 0 }}>
@@ -12,7 +12,7 @@ export function PlatformPage() {
       {/* 匹配引擎标题 */}
       <div className="flex items-center gap-3 flex-shrink-0">
         <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm" style={{ backgroundColor: themeColors?.primary }}>
-          🎯
+          <Target size={18} aria-hidden="true" />
         </div>
         <div>
           <h2 className="text-base font-bold" style={{ color: themeColors?.text }}>智能供需匹配引擎</h2>

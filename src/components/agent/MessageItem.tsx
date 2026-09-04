@@ -12,9 +12,20 @@ interface MessageItemProps {
   themeColors?: Record<string, string | undefined>;
 }
 
+function escapeHtml(text: string): string {
+  const entities: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return text.replace(/[&<>"']/g, (character) => entities[character]);
+}
+
 /** 轻量 Markdown 渲染：粗体、行内代码、标题、列表、分割线、换行 */
 function renderMarkdown(text: string): string {
-  let html = text
+  let html = escapeHtml(text)
     // 分割线
     .replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid var(--color-border,#d1d5db);margin:8px 0" />')
     // 标题 ### / ## / #

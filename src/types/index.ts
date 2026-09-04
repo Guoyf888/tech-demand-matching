@@ -1,6 +1,12 @@
 // 修复：补全类型定义，增加可选属性+默认值，避免运行时报错
 
-export interface Demand {
+export interface ResourceManagementFields {
+  group?: string;
+  pinned?: boolean;
+  starred?: boolean;
+}
+
+export interface Demand extends ResourceManagementFields {
   id: string;
   title: string;
   content: string;
@@ -11,13 +17,14 @@ export interface Demand {
     industryAnalysis?: string;
     techRoadmap?: string;
     suggestions?: string | string[];
+    skills?: string[];
     error?: string;
   };
   createdAt: string;
   updatedAt: string;
 }
 
-export interface TechResult {
+export interface TechResult extends ResourceManagementFields {
   id: string;
   title: string;
   content: string;
@@ -29,6 +36,15 @@ export interface TechResult {
   createdAt: string;
   updatedAt: string;
   error?: string;
+  analysis?: {
+    innovationScore?: number;
+    trl?: number;
+    marketScore?: number;
+    evidenceAssessment?: string;
+    applicationBoundaries?: string;
+    validationSuggestions?: string[];
+    skills?: string[];
+  };
 }
 
 export interface TeamMember {
@@ -67,13 +83,25 @@ export interface Skill {
   group?: string;
   pinned?: boolean;
   isBuiltIn?: boolean;
-  source?: 'hermes' | 'openclaw' | 'native';
+  source?: 'hermes' | 'openclaw' | 'native' | 'scientific';
   content?: string;
   triggers?: string[];
   author?: string;
   prerequisites?: {
     bins?: string[];
     env?: string[];
+  };
+  hermes?: {
+    platforms?: string[];
+    environments?: string[];
+    tags?: string[];
+    relatedSkills?: string[];
+    config?: Array<{
+      key: string;
+      description: string;
+      default?: string;
+      prompt?: string;
+    }>;
   };
 }
 

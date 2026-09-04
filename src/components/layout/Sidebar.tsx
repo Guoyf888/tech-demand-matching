@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Role, useRoleStore } from '@/store/roleStore';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
 
 const menuItems: Record<Role, { label: string; icon: string; path: string }[]> = {
   demand: [
@@ -31,11 +31,9 @@ interface SidebarProps {
 
 export function Sidebar({ activeMenu, onMenuChange }: SidebarProps) {
   const currentRole = useRoleStore((s) => s.currentRole);
-  const { theme } = useThemeStore();
   const items = menuItems[currentRole];
 
-  const currentTheme = theme === 'system' ? 'volcano-white' : theme;
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   return (
     <aside

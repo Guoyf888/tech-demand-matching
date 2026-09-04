@@ -1,6 +1,7 @@
 import { TechResult } from '@/types';
 import { TeamCard } from './TeamCard';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
+import { CircleCheck, FilePenLine, FlaskConical, ListChecks, LoaderCircle, ShieldCheck } from 'lucide-react';
 
 interface TechDetailProps {
   result: TechResult;
@@ -53,8 +54,7 @@ function RingProgress({ value, size = 64, strokeWidth = 5, color }: { value: num
 
 // TRL阶梯指示器
 function TRLIndicator({ level }: { level: number }) {
-  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   return (
     <div className="flex gap-0.5">
@@ -73,15 +73,22 @@ function TRLIndicator({ level }: { level: number }) {
 }
 
 export function TechDetail({ result }: TechDetailProps) {
-  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
+  const statusPresentation = result.status === 'completed'
+    ? { label: '已分析', color: themeColors?.success, background: `${themeColors?.success}20`, icon: CircleCheck }
+    : result.status === 'processing'
+      ? { label: '分析中', color: themeColors?.primary, background: `${themeColors?.primary}20`, icon: LoaderCircle }
+      : { label: '草稿', color: themeColors?.warning, background: `${themeColors?.warning}20`, icon: FilePenLine };
+  const StatusIcon = statusPresentation.icon;
 
   // 从内容中提取指标
   const fullText = `${result.content || ''} ${result.summary || ''}`;
-  const innovationScore = extractMetric(fullText, [/创新[性度]?[评得]?[分]?[：:为]?\s*(\d+)/i, /innovation[:\s]*(\d+)/i]);
-  const marketScore = extractMetric(fullText, [/市场[价]?[值]?[评得]?[分]?[：:为]?\s*(\d+)/i, /market[:\s]*(\d+)/i]);
+  const innovationScore = result.analysis?.innovationScore
+    ?? extractMetric(fullText, [/创新[性度]?[评得]?[分]?[：:为]?\s*(\d+)/i, /innovation[:\s]*(\d+)/i]);
+  const marketScore = result.analysis?.marketScore
+    ?? extractMetric(fullText, [/市场[价]?[值]?[评得]?[分]?[：:为]?\s*(\d+)/i, /market[:\s]*(\d+)/i]);
   const trlMatch = fullText.match(/TRL[\s-]*(\d)/i) || fullText.match(/成熟度[：:为]?\s*(\d)/i);
-  const trlLevel = trlMatch ? parseInt(trlMatch[1], 10) : null;
+  const trlLevel = result.analysis?.trl ?? (trlMatch ? parseInt(trlMatch[1], 10) : null);
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-4">
@@ -95,17 +102,14 @@ export function TechDetail({ result }: TechDetailProps) {
         </h2>
         <div className="flex items-center gap-3 mt-2">
           <span
-            className="px-2.5 py-1 rounded-lg text-xs font-medium"
+            className="px-2.5 py-1 rounded-md text-xs font-medium inline-flex items-center gap-1.5"
             style={{
-              backgroundColor: result.status === 'completed'
-                ? themeColors?.success + '20'
-                : themeColors?.primary + '20',
-              color: result.status === 'completed'
-                ? themeColors?.success
-                : themeColors?.primary,
+              backgroundColor: statusPresentation.background,
+              color: statusPresentation.color,
             }}
           >
-            {result.status === 'completed' ? '✓ 已分析' : '⏳ 分析中'}
+            <StatusIcon size={13} className={result.status === 'processing' ? 'animate-spin' : ''} aria-hidden="true" />
+            {statusPresentation.label}
           </span>
           <span
             className="text-sm"
@@ -225,6 +229,67 @@ export function TechDetail({ result }: TechDetailProps) {
             {result.summary}
           </p>
         </div>
+      )}
+
+      {result.analysis && (
+        <section
+          className="rounded-xl p-5"
+          style={{ backgroundColor: themeColors?.surface, border: `1px solid ${themeColors?.border}` }}
+        >
+          <h4 className="font-semibold mb-3 flex items-center gap-2" style={{ color: themeColors?.text }}>
+            <FlaskConical size={17} style={{ color: themeColors?.primary }} aria-hidden="true" />
+            <span>科学评估</span>
+          </h4>
+
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))' }}
+          >
+            {result.analysis.evidenceAssessment && (
+              <div className="p-3 rounded-lg" style={{ backgroundColor: themeColors?.backgroundAlt }}>
+                <strong className="text-sm flex items-center gap-2" style={{ color: themeColors?.text }}>
+                  <ShieldCheck size={15} aria-hidden="true" />证据质量
+                </strong>
+                <p className="text-sm mt-2 whitespace-pre-wrap leading-relaxed" style={{ color: themeColors?.textSecondary }}>
+                  {result.analysis.evidenceAssessment}
+                </p>
+              </div>
+            )}
+            {result.analysis.applicationBoundaries && (
+              <div className="p-3 rounded-lg" style={{ backgroundColor: themeColors?.backgroundAlt }}>
+                <strong className="text-sm" style={{ color: themeColors?.text }}>应用边界</strong>
+                <p className="text-sm mt-2 whitespace-pre-wrap leading-relaxed" style={{ color: themeColors?.textSecondary }}>
+                  {result.analysis.applicationBoundaries}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {result.analysis.validationSuggestions && result.analysis.validationSuggestions.length > 0 && (
+            <div className="mt-4">
+              <strong className="text-sm flex items-center gap-2" style={{ color: themeColors?.text }}>
+                <ListChecks size={15} aria-hidden="true" />下一步验证
+              </strong>
+              <ol className="mt-2 pl-5 text-sm leading-relaxed" style={{ color: themeColors?.textSecondary, listStyle: 'decimal' }}>
+                {result.analysis.validationSuggestions.map((suggestion) => <li key={suggestion}>{suggestion}</li>)}
+              </ol>
+            </div>
+          )}
+
+          {result.analysis.skills && result.analysis.skills.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-4">
+              {result.analysis.skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="px-2 py-1 rounded text-xs"
+                  style={{ color: themeColors?.primary, backgroundColor: themeColors?.primaryLight }}
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       {/* 团队成员 */}

@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { techStorage } from '@/services/storage/techStorage';
 import { TechResult } from '@/types';
 import { apiGateway } from '@/services/api/gateway';
-import { parseDocument, detectContentType, extractIndustryTags, extractTechTags } from '@/services/documentParser';
-import { Upload, FileCheck } from 'lucide-react';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { parseDocument, detectContentType, extractIndustryTags, extractTechTags, type ParsedDocument } from '@/services/documentParser';
+import { DocumentReviewModal, type DocumentReviewValue } from '@/components/common/DocumentReviewModal';
+import { AlertTriangle, CheckCircle2, Upload, FileCheck, Save, Sparkles } from 'lucide-react';
+import { useThemeColors } from '@/store/themeStore';
+import { analyzeTechDraft } from '@/services/draftAnalysis';
 import './TechUpload.css';
 
 // 对齐输入需求的字符限制规则
@@ -19,27 +21,6 @@ const VALIDATE_REGEX = {
   TITLE: /^[\u4e00-\u9fa5a-zA-Z0-9，。！？；：""''()（）、·~@#￥%……&*+=<>-]{1,100}$/,
   CONTENT: /^[\u4e00-\u9fa5a-zA-Z0-9，。！？；：""''()（）、·~@#￥%……&*+=<>-_\s\S]{1,50000}$/
 };
-
-// 特殊字符映射，用于安全转义JSON敏感字符
-const ESCAPE_MAP: Record<string, string> = {
-  '\\': '\\\\',
-  '"': '\\"',
-  '\n': '\\n',
-  '\r': '\\r',
-  '\t': '\\t',
-};
-
-/**
- * 转义字符串中的JSON敏感字符
- */
-function escapeForJson(str: string): string {
-  let escaped = str;
-  for (const [char, replacement] of Object.entries(ESCAPE_MAP)) {
-    const regex = new RegExp(char.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&'), 'g');
-    escaped = escaped.replace(regex, replacement);
-  }
-  return escaped;
-}
 
 /**
  * 获取错误类型和友好提示
@@ -134,10 +115,11 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
   // 文档上传状态
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
+  const [pendingDocument, setPendingDocument] = useState<ParsedDocument | null>(null);
+  const [documentContext, setDocumentContext] = useState<ParsedDocument | null>(null);
 
   // Theme
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   const navigate = useNavigate();
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,8 +164,8 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
   }, [title, content]);
 
   // ========== 3. API状态校验 ==========
-  const checkApiStatus = useCallback(() => {
-    const validation = apiGateway.validateConfig();
+  const checkApiStatus = useCallback(async () => {
+    const validation = await apiGateway.validateConfig();
     if (validation.valid) {
       setApiStatus({ valid: true, message: 'AI智能分析已就绪' });
     } else {
@@ -202,34 +184,20 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const validTypes = ['.docx', '.pdf'];
+    const validTypes = ['.docx', '.pdf', '.xlsx', '.pptx'];
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!validTypes.includes(ext)) {
       setError({ type: 'validate', message: `不支持的文件格式，仅支持 ${validTypes.join(', ')}` });
       return;
     }
 
-    setDocumentFile(file);
     setDocumentLoading(true);
     setError(null);
 
     try {
       const parsed = await parseDocument(file);
-      const contentType = detectContentType(parsed.text);
-      const industries = extractIndustryTags(parsed.text);
-      const techs = extractTechTags(parsed.text);
-
-      // 自动填充标题和内容
-      const extractedTitle = parsed.text.split('\n')[0]?.slice(0, 100) || file.name.replace(/\.[^.]+$/, '');
       const extractedContent = parsed.text.slice(0, 50000);
-
-      setTitle(extractedTitle);
-      setContent(extractedContent);
-
-      setError({
-        type: 'validate',
-        message: `📄 文档已解析: ${file.name}\n类型: ${contentType === 'result' ? '技术成果' : contentType === 'demand' ? '技术需求' : '待定'}\n行业标签: ${industries.join(', ') || '未识别'}\n技术领域: ${techs.join(', ') || '未识别'}\n内容已自动填充，请检查确认后提交`
-      });
+      setPendingDocument({ ...parsed, text: extractedContent });
 
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : '解析失败';
@@ -238,6 +206,55 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
     } finally {
       setDocumentLoading(false);
     }
+  };
+
+  const handleDocumentConfirm = ({ entries, document }: DocumentReviewValue) => {
+    const contentType = detectContentType(document.text);
+    const industries = extractIndustryTags(document.text);
+    const techs = extractTechTags(document.text);
+    setDocumentFile(new File([], document.fileName, { type: 'application/octet-stream' }));
+
+    if (entries.length > 1) {
+      const createdAt = new Date().toISOString();
+      const drafts = entries.map((entry) => {
+        const tags = Array.from(new Set([
+          ...extractIndustryTags(`${entry.title}\n${entry.content}`),
+          ...extractTechTags(`${entry.title}\n${entry.content}`),
+        ])).slice(0, 6);
+        return {
+          id: techStorage.generateId(),
+          title: entry.title.trim(),
+          content: entry.content.trim(),
+          summary: '',
+          tags,
+          teamMembers: [],
+          documents: [document.fileName],
+          status: 'draft' as const,
+          createdAt,
+          updatedAt: createdAt,
+        } satisfies TechResult;
+      });
+      drafts.forEach((draft) => {
+        techStorage.save(draft);
+        onUploaded?.(draft);
+      });
+      setTitle('');
+      setContent('');
+      setDocumentContext(null);
+      setError({ type: 'success', message: `已从 ${document.fileName} 创建 ${drafts.length} 项独立成果草稿，可在成果列表中逐项核对和分析。` });
+      setPendingDocument(null);
+      return;
+    }
+
+    const [entry] = entries;
+    setDocumentContext(document);
+    setTitle(entry.title);
+    setContent(entry.content);
+    setError({
+      type: 'validate',
+      message: `文档已确认：${document.fileName}\n类型：${contentType === 'result' ? '技术成果' : contentType === 'demand' ? '技术需求' : '待定'}\n行业标签：${industries.join(', ') || '未识别'}\n技术领域：${techs.join(', ') || '未识别'}\n已提取图片：${document.images?.length || 0} 张`,
+    });
+    setPendingDocument(null);
   };
 
   // ========== 6. 保存草稿 ==========
@@ -273,7 +290,7 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
     }
   };
 
-  // ========== 7. 上传并分析 ==========
+  // ========== 7. 提交分析 ==========
   const handleSubmit = async () => {
     // 前置校验
     const titleValidation = validateTitle(title);
@@ -303,7 +320,7 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
       summary: '',
       tags: [],
       teamMembers: [],
-      documents: [],
+      documents: documentContext?.fileName ? [documentContext.fileName] : [],
       status: 'processing',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -313,61 +330,13 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
     techStorage.save(result);
 
     try {
-      // 调用AI分析
-      const escapedContent = escapeForJson(content.trim());
-      const escapedTitle = escapeForJson(title.trim());
-
-      const response = await apiGateway.chat({
-        messages: [
-          {
-            role: 'system',
-            content: `你是一个技术成果分析助手。请分析以下技术成果：
-1. 提取关键词和标签（最多5个）
-2. 用通俗易懂的语言提炼成果概要（50-200字）
-
-请直接返回JSON格式：
-{
-  "tags": ["标签1", "标签2"],
-  "summary": "通俗易懂的成果概要..."
-}`,
-          },
-          {
-            role: 'user',
-            content: `技术成果标题：${escapedTitle}\n\n技术成果详情：${escapedContent}`,
-          },
-        ],
-      });
-
-      const data = await response.json();
-
-      if (data.choices?.[0]?.message?.content) {
-        let aiContent = data.choices[0].message.content;
-
-        // 提取JSON
-        const jsonMatch = aiContent.match(/```(?:json)?\s*([\s\S]*?)```/) ||
-                          aiContent.match(/(\{[\s\S]*\})/);
-
-        if (jsonMatch) {
-          aiContent = jsonMatch[1];
-        }
-
-        try {
-          const analysis = JSON.parse(aiContent);
-          result.tags = Array.isArray(analysis.tags) ? analysis.tags.slice(0, 5) : [];
-          result.summary = typeof analysis.summary === 'string' ? analysis.summary : '';
-        } catch {
-          console.warn('AI返回格式异常，跳过智能分析');
-        }
-      }
-
-      result.status = 'completed';
-      result.updatedAt = new Date().toISOString();
-      techStorage.save(result);
-      setCurrentResult(result);
+      const analyzedResult = await analyzeTechDraft(result, documentContext);
+      techStorage.save(analyzedResult);
+      setCurrentResult(analyzedResult);
       setSubmitStatus('success');
       localStorage.removeItem('techResult_draft');
 
-      if (onUploaded) onUploaded(result);
+      if (onUploaded) onUploaded(analyzedResult);
 
     } catch (err: any) {
       const errorInfo = getErrorMessage(err);
@@ -383,6 +352,7 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
 
   const getErrorBoxClass = (type: string) => {
     switch (type) {
+      case 'success': return 'error-box success-box';
       case 'validate': return 'error-box error-validate';
       case 'network': return 'error-box error-network';
       case 'api': return 'error-box error-api';
@@ -395,11 +365,11 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
   return (
     <div className="tech-upload-container">
       {/* 页面标题 */}
-      <div className="page-header">
+      <div className="tech-upload-header">
         <h2>上传技术成果</h2>
-        <div className="api-status-badge">
-          <span className={`status-icon ${apiStatus.valid ? 'success' : 'error'}`}>
-            {apiStatus.valid ? '✓' : '⚠'}
+        <div className={`api-status-badge ${apiStatus.valid ? 'is-ready' : 'has-error'}`}>
+          <span className="status-icon" aria-hidden="true">
+            {apiStatus.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
           </span>
           <span className="status-text">{apiStatus.message}</span>
         </div>
@@ -416,7 +386,7 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
       <div className="form-container">
         {/* 文档上传区域 */}
         <div
-          className="form-item border-2 border-dashed rounded-lg p-6 text-center transition-all"
+          className="form-item border-2 border-dashed rounded-lg p-4 text-center transition-all"
           style={{
             borderColor: documentFile ? '#52c41a' : themeColors?.border || '#d9d9d9',
             backgroundColor: documentFile ? 'rgba(82, 196, 26, 0.05)' : 'transparent',
@@ -424,7 +394,7 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
         >
           <input
             type="file"
-            accept=".docx,.pdf"
+            accept=".docx,.pdf,.xlsx,.pptx"
             onChange={handleDocumentUpload}
             className="hidden"
             id="tech-doc-upload"
@@ -432,7 +402,7 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
           />
           <label
             htmlFor="tech-doc-upload"
-            className="flex flex-col items-center gap-3 cursor-pointer"
+            className="flex flex-col items-center gap-2 cursor-pointer"
           >
             {documentLoading ? (
               <>
@@ -447,7 +417,7 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
                 <span className="text-xs" style={{ color: themeColors?.textSecondary }}>文档已解析，内容已自动填充</span>
                 <button
                   type="button"
-                  onClick={(e) => { e.preventDefault(); setDocumentFile(null); }}
+                  onClick={(e) => { e.preventDefault(); setDocumentFile(null); setDocumentContext(null); }}
                   className="mt-2 text-xs px-3 py-1 rounded"
                   style={{ backgroundColor: 'rgba(255, 77, 79, 0.1)', color: '#ff4d4f' }}
                 >
@@ -457,8 +427,8 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
             ) : (
               <>
                 <Upload size={32} style={{ color: themeColors?.textSecondary }} />
-                <span className="text-sm" style={{ color: themeColors?.textSecondary }}>点击上传WORD/PDF文档</span>
-                <span className="text-xs" style={{ color: themeColors?.textHint }}>支持自动识别成果内容、智能打标签</span>
+                <span className="text-sm" style={{ color: themeColors?.textSecondary }}>点击上传 Word/PDF/Excel/PPT 文档</span>
+                <span className="text-xs" style={{ color: themeColors?.textHint }}>自动提取文字、表格和图片，确认后回填</span>
               </>
             )}
           </label>
@@ -502,7 +472,7 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
 3. 已取得的成果或效果
 4. 适用行业或领域
 （越详细的描述可以获得更精准的分析结果）`}
-            rows={12}
+            rows={8}
             maxLength={CHAR_LIMIT.CONTENT.max}
             disabled={submitStatus === 'submitting'}
           />
@@ -518,16 +488,19 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
         </div>
 
         {/* 操作按钮 */}
-        <div className="form-actions">
+        <div className="workspace-form-actions">
           <button
-            className="btn btn-secondary"
+            type="button"
+            className="workspace-form-action is-secondary"
             onClick={handleSaveDraft}
             disabled={submitStatus === 'submitting' || submitStatus === 'saving'}
           >
-            {submitStatus === 'saving' ? '保存中...' : '保存草稿'}
+            <Save size={16} aria-hidden="true" />
+            <span>{submitStatus === 'saving' ? '保存中...' : '保存草稿'}</span>
           </button>
           <button
-            className={`btn btn-primary ${submitStatus === 'submitting' ? 'loading' : ''}`}
+            type="button"
+            className="workspace-form-action is-primary"
             onClick={handleSubmit}
             disabled={
               submitStatus === 'submitting' ||
@@ -537,7 +510,8 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
               charCount.content === 0
             }
           >
-            {submitStatus === 'submitting' ? '上传并分析中...' : '上传并分析'}
+            <Sparkles size={16} aria-hidden="true" />
+            <span>{submitStatus === 'submitting' ? '分析中...' : '提交分析'}</span>
           </button>
         </div>
       </div>
@@ -557,6 +531,13 @@ export const TechUpload: React.FC<TechUploadProps> = ({ onUploaded }) => {
             </div>
           )}
         </div>
+      )}
+      {pendingDocument && (
+        <DocumentReviewModal
+          document={pendingDocument}
+          onCancel={() => setPendingDocument(null)}
+          onConfirm={handleDocumentConfirm}
+        />
       )}
     </div>
   );

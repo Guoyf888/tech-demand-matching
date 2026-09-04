@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -17,6 +18,11 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    include: ['src/**/*.test.{ts,tsx}'],
+  },
   build: {
     target: 'esnext',
     rollupOptions: {
@@ -24,7 +30,9 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           icons: ['lucide-react'],
-          docs: ['jszip', 'mammoth', 'pdf-parse'],
+          documentArchive: ['jszip'],
+          documentWord: ['mammoth'],
+          documentPdf: ['pdf-parse'],
         },
       },
     },

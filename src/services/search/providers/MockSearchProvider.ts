@@ -5,6 +5,25 @@
 
 import { SearchRequest, SearchResponse, CompanyResearchResult, ISearchProvider } from '../types';
 
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+
+    const handleAbort = () => {
+      clearTimeout(timeoutId);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', handleAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', handleAbort, { once: true });
+  });
+}
+
 export class MockSearchProvider implements ISearchProvider {
   readonly name = 'mock';
   readonly supportsAdvancedSearch = false;
@@ -17,7 +36,7 @@ export class MockSearchProvider implements ISearchProvider {
     const { query, numResults = 5 } = request;
 
     // 模拟网络延迟
-    await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 500));
+    await delay(500 + Math.random() * 500, request.signal);
 
     // 生成模拟搜索结果
     const results = this.generateMockResults(query, numResults);
@@ -27,14 +46,18 @@ export class MockSearchProvider implements ISearchProvider {
       results,
       provider: 'mock',
       query,
+      isMock: true,
     };
   }
 
-  async researchCompany(companyName: string): Promise<CompanyResearchResult> {
-    await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 700));
+  async researchCompany(companyName: string, signal?: AbortSignal): Promise<CompanyResearchResult> {
+    await delay(800 + Math.random() * 700, signal);
 
     return {
       companyName,
+      success: true,
+      provider: 'mock',
+      isMock: true,
       basicInfo: {
         legalRepresentative: '张某某',
         registeredCapital: '5000万元人民币',

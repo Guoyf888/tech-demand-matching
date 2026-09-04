@@ -1,5 +1,5 @@
 import { Role } from '@/store/roleStore';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
 
 const roleConfig = {
   demand: { label: '需求方', icon: '🏢', description: '企业技术需求' },
@@ -15,8 +15,7 @@ interface RoleSwitcherProps {
 export function RoleSwitcher({ currentRole, onRoleChange }: RoleSwitcherProps) {
   
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   return (
     <div className="flex gap-2">

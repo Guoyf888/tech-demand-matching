@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors, useThemeIsDark, useThemeStore } from '@/store/themeStore';
 
 // 顶部导航
 export function TopMenu() {
@@ -8,8 +8,8 @@ export function TopMenu() {
 
   const location = useLocation();
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
+  const isDark = useThemeIsDark();
 
   // 核心功能标签
   const coreTabs = [
@@ -99,7 +99,6 @@ export function TopMenu() {
           {/* 主题切换 */}
           <button
             onClick={() => {
-              const isDark = themes[currentTheme as keyof typeof themes]?.isDark;
               const newTheme = isDark ? 'volcano-white' : 'star-black';
               useThemeStore.getState().setTheme(newTheme);
             }}
@@ -108,9 +107,9 @@ export function TopMenu() {
               backgroundColor: themeColors?.surfaceHover,
               color: themeColors?.textSecondary,
             }}
-            title={themes[currentTheme as keyof typeof themes]?.isDark ? '切换浅色模式' : '切换深色模式'}
+            title={isDark ? '切换浅色模式' : '切换深色模式'}
           >
-            {themes[currentTheme as keyof typeof themes]?.isDark ? '☀️' : '🌙'}
+            {isDark ? '☀️' : '🌙'}
           </button>
 
           {/* 更多菜单 */}

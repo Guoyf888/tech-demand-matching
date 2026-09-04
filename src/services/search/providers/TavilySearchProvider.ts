@@ -61,6 +61,7 @@ export class TavilySearchProvider implements ISearchProvider {
           include_raw_content: false,
           include_images: false,
         }),
+        signal: request.signal,
       });
 
       if (!response.ok) {
@@ -100,15 +101,18 @@ export class TavilySearchProvider implements ISearchProvider {
     }
   }
 
-  async researchCompany(companyName: string): Promise<CompanyResearchResult> {
+  async researchCompany(companyName: string, signal?: AbortSignal): Promise<CompanyResearchResult> {
     // 并行执行多个搜索查询
     const [newsResponse, industryResponse] = await Promise.all([
-      this.search({ query: `${companyName} 最新动态 新闻`, numResults: 5, searchType: 'news' }),
-      this.search({ query: `${companyName} 所处行业 最新动态`, numResults: 5 }),
+      this.search({ query: `${companyName} 最新动态 新闻`, numResults: 5, searchType: 'news', signal }),
+      this.search({ query: `${companyName} 所处行业 最新动态`, numResults: 5, signal }),
     ]);
 
     return {
       companyName,
+      success: newsResponse.success && industryResponse.success,
+      error: newsResponse.error || industryResponse.error,
+      provider: 'tavily',
       news: newsResponse.success ? newsResponse.results : [],
       industryNews: industryResponse.success ? industryResponse.results : [],
     };

@@ -2,11 +2,87 @@ import { useState, useEffect, useRef } from 'react';
 import { getBuiltInSkills } from '@/services/skills/builtInSkills';
 import { skillStore } from '@/services/skills/skillStore';
 import { Skill } from '@/types';
-import { themes, useThemeStore } from '@/store/themeStore';
-import { importSkillsFromZip, skillStorage } from '@/services/hermes/skillManager';
+import { useThemeColors } from '@/store/themeStore';
+import { decodeSkillText, importSkillsFromZip, skillStorage } from '@/services/hermes/skillManager';
 import { getOpenClawService } from '@/services/openclaw/OpenClawService';
 import { getHermesSkillsService } from '@/services/hermes/HermesSkillsService';
 import { parseSkillFile, validateSkillFile, generateSampleSkillFile } from '@/services/skills/SkillFileParser';
+import { scientificSkillService } from '@/services/skills/scientificSkills';
+import { getSkillPresentation } from '@/utils/skillPresentation';
+import { Check, Pin, Trash2, Upload } from 'lucide-react';
+import './SkillsPage.css';
+
+function getSkillSourceLabel(skill: Skill): string {
+  if (skill.source === 'scientific') return '科研技能';
+  if (skill.source === 'hermes') return 'Hermes';
+  if (skill.source === 'openclaw') return 'OpenClaw';
+  if (skill.isBuiltIn) return '内置技能';
+  return '自定义';
+}
+
+interface SkillMarketCardProps {
+  skill: Skill;
+  onToggleEnabled: (skillId: string) => void;
+  onTogglePin: (skillId: string) => void;
+  onChangeGroup: (skillId: string, group: string) => void;
+  onDelete: (skillId: string) => void;
+}
+
+function SkillMarketCard({ skill, onToggleEnabled, onTogglePin, onChangeGroup, onDelete }: SkillMarketCardProps) {
+  const themeColors = useThemeColors();
+  const presentation = getSkillPresentation(skill);
+  return (
+    <article className="skill-market-card" style={{ backgroundColor: themeColors?.surface, border: `1px solid ${themeColors?.border}` }}>
+      <div className="skill-card-main">
+        <div className="skill-card-icon" style={{ backgroundColor: themeColors?.backgroundAlt }} aria-hidden="true">{skill.icon || '◇'}</div>
+        <div className="skill-card-content">
+          <div className="skill-card-heading">
+            <div className="min-w-0">
+              <div className="skill-card-title-row">
+                <h3 style={{ color: themeColors?.text }}>{skill.name}</h3>
+                {skill.pinned && <span className="skill-card-badge" style={{ backgroundColor: themeColors?.primaryLight, color: themeColors?.primary }}>置顶</span>}
+                <span className="skill-card-badge" style={{ backgroundColor: themeColors?.backgroundAlt, color: themeColors?.textSecondary }}>{getSkillSourceLabel(skill)}</span>
+              </div>
+              <p className="skill-card-domain" style={{ color: themeColors?.primary }}>{presentation.shortDescription} · {presentation.domain}</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={skill.enabled}
+              className={`skill-enable-switch ${skill.enabled ? 'is-enabled' : ''}`}
+              style={{ backgroundColor: skill.enabled ? themeColors?.success : themeColors?.surfaceHover }}
+              onClick={() => onToggleEnabled(skill.id)}
+              title={skill.enabled ? '停用技能' : '启用技能'}
+            >
+              <span style={{ backgroundColor: '#fff' }}>{skill.enabled && <Check size={11} />}</span>
+            </button>
+          </div>
+          <p className="skill-card-description" style={{ color: themeColors?.textSecondary }}>{presentation.explanation}</p>
+        </div>
+      </div>
+
+      <div className="skill-card-meta" style={{ color: themeColors?.textHint, borderTop: `1px solid ${themeColors?.border}` }}>
+        <span>v{skill.version}</span><span>使用 {skill.metadata.usageCount} 次</span><span>成功率 {skill.metadata.successRate}%</span>
+      </div>
+
+      <div className="skill-card-actions">
+        <button type="button" className={skill.pinned ? 'is-active' : ''} onClick={() => onTogglePin(skill.id)} style={{ color: skill.pinned ? themeColors?.primary : themeColors?.textSecondary, borderColor: themeColors?.border, backgroundColor: skill.pinned ? themeColors?.primaryLight : themeColors?.surface }} title={skill.pinned ? '取消置顶' : '置顶技能'}>
+          <Pin size={14} fill={skill.pinned ? 'currentColor' : 'none'} />
+          <span>{skill.pinned ? '已置顶' : '置顶'}</span>
+        </button>
+        <label className="skill-group-select" style={{ borderColor: themeColors?.border, backgroundColor: themeColors?.surface }}>
+          <span className="sr-only">技能分组</span>
+          <select value={skill.group || ''} onChange={(event) => onChangeGroup(skill.id, event.target.value)} style={{ color: themeColors?.textSecondary }}>
+            <option value="">无分组</option><option value="分析类">分析类</option><option value="工具类">工具类</option><option value="资源类">资源类</option>
+          </select>
+        </label>
+        {!skill.isBuiltIn && (
+          <button type="button" className="is-danger-icon" onClick={() => onDelete(skill.id)} style={{ color: themeColors?.error, borderColor: themeColors?.border, backgroundColor: themeColors?.surface }} title="删除技能" aria-label={`删除技能 ${skill.name}`}><Trash2 size={14} /></button>
+        )}
+      </div>
+    </article>
+  );
+}
 
 /**
  * 格式化文件预览内容，根据文件类型进行美化展示
@@ -80,14 +156,14 @@ export function SkillsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [, setImportResult] = useState<{ success: number; failed: number } | null>(null);
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   useEffect(() => {
     const builtIn = getBuiltInSkills();
     const custom = skillStorage.getAll();
     const openClaw = getOpenClawService().getAllSkills();
     const hermes = getHermesSkillsService().getAllSkills();
+    const scientific = scientificSkillService.getAllSkills();
     const allSkills = [...builtIn];
 
     for (const skill of openClaw) {
@@ -97,6 +173,12 @@ export function SkillsPage() {
     }
 
     for (const skill of hermes) {
+      if (!allSkills.find(s => s.name === skill.name)) {
+        allSkills.push(skill);
+      }
+    }
+
+    for (const skill of scientific) {
       if (!allSkills.find(s => s.name === skill.name)) {
         allSkills.push(skill);
       }
@@ -243,7 +325,7 @@ export function SkillsPage() {
 
     if (ext === 'unknown') {
       try {
-        const content = await file.text();
+        const content = decodeSkillText(await file.arrayBuffer());
         const preview = formatFilePreview(content, file.name);
         setFilePreview(preview);
 
@@ -269,7 +351,7 @@ export function SkillsPage() {
 
     let content: string;
     try {
-      content = await file.text();
+      content = decodeSkillText(await file.arrayBuffer());
     } catch (error: any) {
       setSkillParseError(`读取文件失败：${error.message}`);
       return;
@@ -376,12 +458,13 @@ export function SkillsPage() {
 
   const groupedSkills = {
     '内置技能': skills.filter(s => s.isBuiltIn),
+    '科研技能': skills.filter(s => s.source === 'scientific'),
     'Hermes': skills.filter(s => s.source === 'hermes'),
     'OpenClaw': skills.filter(s => s.source === 'openclaw'),
-    '自定义': skills.filter(s => !s.isBuiltIn && s.source !== 'hermes' && s.source !== 'openclaw'),
+    '自定义': skills.filter(s => !s.isBuiltIn && s.source !== 'scientific' && s.source !== 'hermes' && s.source !== 'openclaw'),
   };
 
-  const groups = ['全部', '内置技能', 'Hermes', 'OpenClaw', '自定义'];
+  const groups = ['全部', '科研技能', '内置技能', 'Hermes', 'OpenClaw', '自定义'];
 
   const filteredSkills = selectedGroup === '全部'
     ? skills
@@ -394,218 +477,37 @@ export function SkillsPage() {
   });
 
   return (
-    <div className="max-w-4xl mx-auto animate-scale-in">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold" style={{ color: themeColors?.text }}>技能市场</h2>
-        <button
-          onClick={() => setShowUploadModal(true)}
-          className="px-5 py-2.5 rounded-lg font-medium text-white transition-all hover:shadow-md"
-          style={{ backgroundColor: themeColors?.primary }}
-        >
-          + 上传技能
+    <div className="skills-page-shell animate-scale-in">
+      <div className="skills-page-header">
+        <div>
+          <h1 style={{ color: themeColors?.text }}>技能市场</h1>
+          <span style={{ color: themeColors?.textHint }}>{sortedSkills.length} 个技能</span>
+        </div>
+        <button type="button" onClick={() => setShowUploadModal(true)} className="workspace-form-action is-primary" style={{ backgroundColor: themeColors?.primary }}>
+          <Upload size={16} />上传技能
         </button>
       </div>
 
-      {/* Group Filter */}
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {groups.map((group) => (
-          <button
-            key={group}
-            onClick={() => setSelectedGroup(group)}
-            className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-            style={{
-              backgroundColor: selectedGroup === group ? themeColors?.primary : themeColors?.primaryLight,
-              color: selectedGroup === group ? '#fff' : themeColors?.primary,
-            }}
-          >
-            {group}
-          </button>
+      <nav className="skills-category-tabs" aria-label="技能来源筛选" style={{ borderBottomColor: themeColors?.border }}>
+        {groups.map((group) => {
+          const count = group === '全部' ? skills.length : groupedSkills[group as keyof typeof groupedSkills]?.length || 0;
+          return (
+            <button key={group} type="button" onClick={() => setSelectedGroup(group)} className={selectedGroup === group ? 'is-active' : ''} style={{ color: selectedGroup === group ? themeColors?.primary : themeColors?.textSecondary }}>
+              <span>{group}</span><strong style={{ backgroundColor: themeColors?.backgroundAlt }}>{count}</strong>
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="skills-grid">
+        {sortedSkills.map((skill) => (
+          <SkillMarketCard key={skill.id} skill={skill} onToggleEnabled={handleToggleEnabled} onTogglePin={handleTogglePin} onChangeGroup={handleChangeGroup} onDelete={handleDeleteSkill} />
         ))}
       </div>
 
-      {/* Skills Grid */}
-      <div className="space-y-6">
-        {selectedGroup === '全部' && Object.entries(groupedSkills).map(([category, categorySkills]) => (
-          categorySkills.length > 0 && (
-            <div key={category}>
-              <div className="text-sm font-medium mb-3 flex items-center gap-2" style={{ color: themeColors?.text }}>
-                <span>{category}</span>
-                <span className="flex-1 h-px" style={{ backgroundColor: themeColors?.border }}></span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                {categorySkills.map((skill) => (
-                  <div
-                    key={skill.id}
-                    className="rounded-xl p-4 transition-all hover:shadow-lg"
-                    style={{
-                      backgroundColor: themeColors?.surface,
-                      border: `1px solid ${themeColors?.border}`,
-                    }}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{skill.icon}</span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-medium" style={{ color: themeColors?.text }}>{skill.name}</h4>
-                            {skill.pinned && (
-                              <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: themeColors?.primary, color: '#fff' }}>
-                                置顶
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm mt-1" style={{ color: themeColors?.textHint }}>{skill.description}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleToggleEnabled(skill.id)}
-                        className="px-3 py-1 rounded-full text-xs font-medium transition-all hover:scale-95"
-                        style={{
-                          backgroundColor: skill.enabled ? themeColors?.success + '20' : themeColors?.surfaceHover,
-                          color: skill.enabled ? themeColors?.success : themeColors?.textHint,
-                        }}
-                      >
-                        {skill.enabled ? '已启用' : '已禁用'}
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs mt-3 pt-3" style={{ color: themeColors?.textHint, borderTop: `1px solid ${themeColors?.border}` }}>
-                      <span>v{skill.version}</span>
-                      <span>·</span>
-                      <span>使用 {skill.metadata.usageCount} 次</span>
-                      <span>·</span>
-                      <span>成功率 {skill.metadata.successRate}%</span>
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                      <button
-                        onClick={() => handleTogglePin(skill.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                        style={{
-                          backgroundColor: themeColors?.primaryLight,
-                          color: themeColors?.primary,
-                        }}
-                      >
-                        {skill.pinned ? '取消置顶' : '置顶'}
-                      </button>
-                      <select
-                        value={skill.group || ''}
-                        onChange={(e) => handleChangeGroup(skill.id, e.target.value)}
-                        className="px-2 py-1.5 rounded-lg text-xs border"
-                        style={{
-                          backgroundColor: themeColors?.surface,
-                          borderColor: themeColors?.border,
-                          color: themeColors?.text,
-                        }}
-                      >
-                        <option value="">无分组</option>
-                        <option value="分析类">分析类</option>
-                        <option value="工具类">工具类</option>
-                        <option value="资源类">资源类</option>
-                      </select>
-                      {!skill.isBuiltIn && (
-                        <button
-                          onClick={() => handleDeleteSkill(skill.id)}
-                          className="px-2 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-95"
-                          style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}
-                        >
-                          删除
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-        ))}
-
-        {/* Custom/Ungrouped Skills */}
-        {selectedGroup !== '全部' && sortedSkills.map((skill) => (
-          <div
-            key={skill.id}
-            className="rounded-xl p-4 transition-all hover:shadow-lg"
-            style={{
-              backgroundColor: themeColors?.surface,
-              border: `1px solid ${themeColors?.border}`,
-            }}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{skill.icon}</span>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium" style={{ color: themeColors?.text }}>{skill.name}</h4>
-                    {skill.pinned && (
-                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: themeColors?.primary, color: '#fff' }}>
-                        置顶
-                      </span>
-                    )}
-                    {skill.isBuiltIn && (
-                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: themeColors?.primaryLight, color: themeColors?.primary }}>
-                        内置
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm mt-1" style={{ color: themeColors?.textHint }}>{skill.description}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleToggleEnabled(skill.id)}
-                className="px-3 py-1 rounded-full text-xs font-medium transition-all hover:scale-95"
-                style={{
-                  backgroundColor: skill.enabled ? themeColors?.success + '20' : themeColors?.surfaceHover,
-                  color: skill.enabled ? themeColors?.success : themeColors?.textHint,
-                }}
-              >
-                {skill.enabled ? '已启用' : '已禁用'}
-              </button>
-            </div>
-            <div className="flex items-center gap-2 text-xs mt-3 pt-3" style={{ color: themeColors?.textHint, borderTop: `1px solid ${themeColors?.border}` }}>
-              <span>v{skill.version}</span>
-              <span>·</span>
-              <span>使用 {skill.metadata.usageCount} 次</span>
-              <span>·</span>
-              <span>成功率 {skill.metadata.successRate}%</span>
-            </div>
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => handleTogglePin(skill.id)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                style={{
-                  backgroundColor: themeColors?.primaryLight,
-                  color: themeColors?.primary,
-                }}
-              >
-                {skill.pinned ? '取消置顶' : '置顶'}
-              </button>
-              <select
-                value={skill.group || ''}
-                onChange={(e) => handleChangeGroup(skill.id, e.target.value)}
-                className="px-2 py-1.5 rounded-lg text-xs border"
-                style={{
-                  backgroundColor: themeColors?.surface,
-                  borderColor: themeColors?.border,
-                  color: themeColors?.text,
-                }}
-              >
-                <option value="">无分组</option>
-                <option value="分析类">分析类</option>
-                <option value="工具类">工具类</option>
-                <option value="资源类">资源类</option>
-              </select>
-              {!skill.isBuiltIn && (
-                <button
-                  onClick={() => handleDeleteSkill(skill.id)}
-                  className="px-2 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-95"
-                  style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}
-                >
-                  删除
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+      {sortedSkills.length === 0 && (
+        <div className="skills-empty-state" style={{ color: themeColors?.textHint, borderColor: themeColors?.border }}>当前分类暂无技能</div>
+      )}
 
       {/* Upload Modal */}
       {showUploadModal && (

@@ -11,6 +11,7 @@
 
 import { Skill, SkillAction } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { parseSkillFrontmatter } from '@/services/skills/skillFrontmatter';
 
 // OpenClaw skill metadata structure
 export interface OpenClawSkillMeta {
@@ -43,103 +44,8 @@ export interface OpenClawSkillMeta {
 
 // Parse YAML frontmatter from SKILL.md (supports both Hermes and OpenClaw formats)
 function parseFrontmatter(content: string): { metadata: OpenClawSkillMeta; content: string } {
-  const lines = content.split('\n');
-  let frontmatterEnd = -1;
-  const metadata: OpenClawSkillMeta = { name: '', description: '' };
-
-  if (lines[0]?.trim() === '---') {
-    for (let i = 1; i < lines.length; i++) {
-      if (lines[i]?.trim() === '---') {
-        frontmatterEnd = i;
-        break;
-      }
-
-      const line = lines[i];
-      const colonIndex = line.indexOf(':');
-
-      if (colonIndex > 0) {
-        const key = line.substring(0, colonIndex).trim();
-        let value = line.substring(colonIndex + 1).trim();
-
-        // Handle YAML array format
-        if (value.startsWith('[') && value.endsWith(']')) {
-          value = value.slice(1, -1);
-        }
-
-        // Handle YAML object/block
-        if (value === '' || value === '{' || value.startsWith('{')) {
-          // Try to parse multi-line YAML block
-          const blockLines = lines.slice(i + 1);
-          let blockEnd = -1;
-          for (let j = 0; j < blockLines.length; j++) {
-            if (blockLines[j].match(/^\s*}/) || blockLines[j].match(/^\s+\w+:/)) {
-              // Continue until we hit a line that looks like a new top-level key
-              if (blockLines[j].match(/^\s{0,2}\w/) && !blockLines[j].startsWith('  ') && !blockLines[j].startsWith('\t')) {
-                blockEnd = j;
-                break;
-              }
-            }
-          }
-          if (blockEnd > 0) {
-            i += blockEnd;
-          }
-        }
-
-        switch (key) {
-          case 'name':
-          case 'description':
-          case 'homepage':
-            (metadata as unknown as Record<string, unknown>)[key] = value;
-            break;
-          case 'metadata':
-            // Parse metadata block
-            try {
-              const metaContent = lines.slice(i + 1).join('\n');
-              // Handle OpenClaw metadata with nested openclaw object
-              const openclawMatch = metaContent.match(/openclaw:\s*\n([\s\S]*?)(?=^\w|\n---)/m);
-              const hermesMatch = metaContent.match(/hermes:\s*\n([\s\S]*?)(?=^\w|\n---)/m);
-
-              const parsedMeta: Record<string, unknown> = {};
-
-              if (openclawMatch) {
-                const openclawData: Record<string, unknown> = {};
-                openclawMatch[1].split('\n').forEach((metaLine: string) => {
-                  const [k, ...vParts] = metaLine.split(':');
-                  if (k && vParts.length) {
-                    const v = vParts.join(':').trim();
-                    openclawData[k.trim()] = v;
-                  }
-                });
-                parsedMeta.openclaw = openclawData;
-              }
-
-              if (hermesMatch) {
-                const hermesData: Record<string, unknown> = {};
-                hermesMatch[1].split('\n').forEach((metaLine: string) => {
-                  const [k, ...vParts] = metaLine.split(':');
-                  if (k && vParts.length) {
-                    const v = vParts.join(':').trim();
-                    hermesData[k.trim()] = v;
-                  }
-                });
-                parsedMeta.hermes = hermesData;
-              }
-
-              metadata.metadata = parsedMeta as OpenClawSkillMeta['metadata'];
-            } catch {
-              // Ignore metadata parse errors
-            }
-            break;
-        }
-      }
-    }
-  }
-
-  const skillContent = frontmatterEnd >= 0
-    ? lines.slice(frontmatterEnd + 1).join('\n').trim()
-    : content;
-
-  return { metadata, content: skillContent };
+  const parsed = parseSkillFrontmatter(content, { name: '', description: '' } as OpenClawSkillMeta);
+  return { metadata: parsed.metadata, content: parsed.content };
 }
 
 // Detect icon from OpenClaw metadata or content

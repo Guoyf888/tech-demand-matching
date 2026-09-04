@@ -4,6 +4,7 @@ node_modules/
 # Build
 dist/
 *.exe
+release/
 
 # IDE
 .vscode/

@@ -17,7 +17,7 @@ const FooterVersion: React.FC = () => {
       </div>
 
       <div className="version-info">
-        {versionInfo.version} 技术需求智能对接系统
+        {versionInfo.version} AI技术经理人
       </div>
     </div>
   );

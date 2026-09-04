@@ -11,6 +11,7 @@
 
 import { Skill, SkillAction } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { parseSkillFrontmatter } from './skillFrontmatter';
 
 // Skill file metadata
 export interface SkillFileMeta {
@@ -58,8 +59,8 @@ function validateSkillMeta(meta: Partial<SkillFileMeta>): string[] {
 
   if (!meta.description || meta.description.trim() === '') {
     errors.push('技能描述不能为空');
-  } else if (meta.description.length > 500) {
-    errors.push('技能描述不能超过500个字符');
+  } else if (meta.description.length > 1024) {
+    errors.push('技能描述不能超过1024个字符');
   }
 
   if (meta.version && !/^\d+\.\d+\.\d+$/.test(meta.version)) {
@@ -195,93 +196,66 @@ function parseJSONSkill(content: string): ParseResult<Partial<SkillFileMeta>> {
  * Parse YAML-like frontmatter format with improved error handling
  */
 function parseFrontmatterSkill(content: string): ParseResult<Partial<SkillFileMeta>> {
-  const lines = content.split('\n');
-  const warnings: string[] = [];
+  interface RawSkillMeta extends Partial<SkillFileMeta> {
+    metadata?: {
+      hermes?: { tags?: string[] };
+      openclaw?: {
+        emoji?: string;
+        requires?: { bins?: string[]; env?: string[] };
+        triggers?: string[];
+        tags?: string[];
+      };
+    };
+    prerequisites?: { commands?: string[]; env_vars?: string[] };
+    required_environment_variables?: Array<{ name: string; optional?: boolean }>;
+  }
 
-  if (!lines[0] || lines[0].trim() !== '---') {
-    // Try to parse as simple key-value format
+  const parsed = parseSkillFrontmatter(content, {} as RawSkillMeta);
+  if (!parsed.hasFrontmatter) {
     return parseSimpleKeyValueSkill(content);
   }
-
-  let frontmatterEnd = -1;
-  const meta: Record<string, string | string[]> = {};
-
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i]?.trim() === '---') {
-      frontmatterEnd = i;
-      break;
-    }
-
-    const line = lines[i];
-    const colonIndex = line.indexOf(':');
-
-    if (colonIndex > 0) {
-      const key = line.substring(0, colonIndex).trim();
-      let value = line.substring(colonIndex + 1).trim();
-
-      // Skip empty lines within frontmatter
-      if (!key && !value) continue;
-
-      // Handle array format: [item1, item2, item3]
-      if (value.startsWith('[') && value.endsWith(']')) {
-        value = value.slice(1, -1);
-        meta[key] = value.split(',').map(s => s.trim()).filter(Boolean);
-      } else if (value === '') {
-        // Multi-line value - collect lines until next key
-        const multiLines: string[] = [];
-        for (let j = i + 1; j < lines.length; j++) {
-          if (lines[j].match(/^\s+[^-\s]/)) {
-            multiLines.push(lines[j].trim());
-            i = j;
-          } else if (lines[j].trim() === '' || lines[j].trim().startsWith('-')) {
-            break;
-          } else {
-            break;
-          }
-        }
-        if (multiLines.length > 0) {
-          meta[key] = multiLines;
-        }
-      } else {
-        meta[key] = value;
-      }
-    } else if (line.trim() && !line.trim().startsWith('#') && !line.trim().startsWith('-')) {
-      // Line without colon but not empty or a comment
-      warnings.push(`第 ${i + 1} 行格式不规范，已忽略：${line.trim().slice(0, 50)}`);
-    }
+  if (parsed.error) {
+    return { success: false, error: parsed.error };
   }
 
-  if (frontmatterEnd === -1) {
-    return {
-      success: false,
-      error: 'Frontmatter格式错误：未找到结束标记 ---\n\n正确格式：\n---\nname: 技能名称\ndescription: 描述\n---\n内容...'
-    };
-  }
-
-  // Check if we got at least a name
-  if (!meta.name || (typeof meta.name === 'string' && !meta.name.trim())) {
+  const raw = parsed.metadata;
+  if (!raw.name || !raw.name.trim()) {
     return {
       success: false,
       error: 'Frontmatter中缺少必填字段：name（技能名称）\n\n请确保frontmatter包含：\n---\nname: 您的技能名称\ndescription: 技能描述\n---'
     };
   }
 
-  // Extract main content (after frontmatter)
-  const mainContent = lines.slice(frontmatterEnd + 1).join('\n').trim();
+  const hermesTags = raw.metadata?.hermes?.tags || [];
+  const openClawTags = raw.metadata?.openclaw?.tags || [];
+  const tags = raw.tags || [...hermesTags, ...openClawTags];
+  const requiredEnv = [
+    ...(raw.required_env || []),
+    ...(raw.prerequisites?.env_vars || []),
+    ...(raw.metadata?.openclaw?.requires?.env || []),
+    ...(raw.required_environment_variables || [])
+      .filter(variable => !variable.optional)
+      .map(variable => variable.name),
+  ];
+  const requiredBins = [
+    ...(raw.required_bins || []),
+    ...(raw.prerequisites?.commands || []),
+    ...(raw.metadata?.openclaw?.requires?.bins || []),
+  ];
 
   return {
     success: true,
-    warnings,
     data: {
-      name: (meta.name as string) || '',
-      description: (meta.description as string) || mainContent.slice(0, 200) || '',
-      version: (meta.version as string) || '1.0.0',
-      icon: (meta.icon as string) || (meta.emoji as string),
-      author: (meta.author as string),
-      group: (meta.group as string) || (meta.category as string),
-      triggers: Array.isArray(meta.triggers) ? meta.triggers as string[] : undefined,
-      content: mainContent,
-      tags: Array.isArray(meta.tags) ? meta.tags as string[] : undefined,
+      ...raw,
+      name: raw.name,
+      description: raw.description || parsed.content.slice(0, 200),
+      version: raw.version || '1.0.0',
+      icon: raw.icon || raw.emoji || raw.metadata?.openclaw?.emoji,
+      triggers: raw.triggers || raw.metadata?.openclaw?.triggers || tags,
+      content: parsed.content,
+      tags: Array.from(new Set(tags)),
+      required_env: Array.from(new Set(requiredEnv)),
+      required_bins: Array.from(new Set(requiredBins)),
     },
   };
 }

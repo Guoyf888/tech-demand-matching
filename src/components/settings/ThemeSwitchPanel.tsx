@@ -1,44 +1,58 @@
 import { useState } from 'react';
-import { useApiStore } from '@/store/apiStore';
-import { themes, useThemeStore, Theme } from '@/store/themeStore';
+import { useApiStore, ALL_PROVIDERS } from '@/store/apiStore';
+import { useThemeColors, useThemeStore, Theme } from '@/store/themeStore';
+import { Check, Monitor, Moon, Sun, Trash2, Waves } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface ThemeOption {
   id: Theme;
   name: string;
-  icon: string;
+  icon: LucideIcon;
   description: string;
+  preview: { background: string; surface: string; accent: string; text: string };
 }
 
 const themeOptions: ThemeOption[] = [
   {
     id: 'volcano-white',
-    name: '火山白',
-    icon: '☀️',
-    description: '明亮的浅色界面，适合白天使用',
+    name: '科技浅蓝',
+    icon: Sun,
+    description: '明亮、清晰的科技蓝工作台',
+    preview: { background: '#eef6ff', surface: '#ffffff', accent: '#1685f8', text: '#16324f' },
+  },
+  {
+    id: 'tech-blue',
+    name: '深海蓝',
+    icon: Waves,
+    description: '高对比度的深蓝科技界面',
+    preview: { background: '#0a1929', surface: '#173a5e', accent: '#00d4ff', text: '#ffffff' },
   },
   {
     id: 'star-black',
     name: '星空黑',
-    icon: '🌙',
+    icon: Moon,
     description: '柔和的深色界面，适合夜间使用',
+    preview: { background: '#0f172a', surface: '#1e293b', accent: '#60a5fa', text: '#f1f5f9' },
   },
   {
     id: 'system',
     name: '系统跟随',
-    icon: '💻',
+    icon: Monitor,
     description: '自动跟随系统主题设置',
+    preview: { background: '#e5e7eb', surface: '#ffffff', accent: '#3b82f6', text: '#334155' },
   },
 ];
 
 export function ThemeSwitchPanel() {
   const { theme: currentThemeName, setTheme } = useThemeStore();
-  const effectiveTheme = currentThemeName === 'system' ? 'volcano-white' : currentThemeName;
-  const themeColors = themes[effectiveTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        {themeOptions.map((option) => (
+      <div className="theme-option-grid">
+        {themeOptions.map((option) => {
+          const OptionIcon = option.icon;
+          return (
           <button
             key={option.id}
             onClick={() => setTheme(option.id)}
@@ -50,43 +64,36 @@ export function ThemeSwitchPanel() {
               backgroundColor: themeColors?.surface,
             }}
           >
-            {/* Theme Preview */}
             <div
               className="w-full h-16 rounded-lg mb-3 flex items-center justify-center"
-              style={{
-                backgroundColor: option.id === 'volcano-white' || option.id === 'berry-pink' ? '#FFFFFF' : '#1E1E1E',
-              }}
+              style={{ backgroundColor: option.preview.background }}
             >
-              <div className="text-center">
+              <div
+                className="w-4/5 h-10 rounded-md flex items-center gap-2 px-2"
+                style={{ backgroundColor: option.preview.surface }}
+              >
                 <div
-                  className="w-8 h-8 rounded-full mx-auto mb-1"
-                  style={{
-                    backgroundColor: option.id === 'volcano-white' ? '#0ea5e9' : '#60a5fa',
-                  }}
+                  className="w-2 h-7 rounded-sm"
+                  style={{ backgroundColor: option.preview.accent }}
                 />
-                <div
-                  className="w-12 h-2 rounded"
-                  style={{
-                    backgroundColor: option.id === 'volcano-white' || option.id === 'berry-pink' ? '#333333' : '#FFFFFF',
-                    opacity: 0.6,
-                  }}
-                />
+                <div className="flex-1 space-y-1.5">
+                  <div className="w-3/4 h-1.5 rounded" style={{ backgroundColor: option.preview.text, opacity: 0.75 }} />
+                  <div className="w-1/2 h-1.5 rounded" style={{ backgroundColor: option.preview.text, opacity: 0.25 }} />
+                </div>
               </div>
             </div>
 
-            {/* Selected indicator */}
             {currentThemeName === option.id && (
               <div
                 className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs"
                 style={{ backgroundColor: themeColors?.primary }}
               >
-                ✓
+                <Check size={13} strokeWidth={2.5} aria-hidden="true" />
               </div>
             )}
 
-            {/* Theme Name */}
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xl">{option.icon}</span>
+              <OptionIcon size={17} style={{ color: themeColors.primary }} aria-hidden="true" />
               <span
                 className="font-medium"
                 style={{ color: themeColors?.text }}
@@ -95,7 +102,6 @@ export function ThemeSwitchPanel() {
               </span>
             </div>
 
-            {/* Description */}
             <p
               className="text-xs"
               style={{ color: themeColors?.textHint }}
@@ -103,7 +109,8 @@ export function ThemeSwitchPanel() {
               {option.description}
             </p>
           </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* Current Theme Info */}
@@ -122,7 +129,7 @@ export function ThemeSwitchPanel() {
             className="font-medium"
             style={{ color: themeColors?.text }}
           >
-            {themeOptions.find((o) => o.id === currentThemeName)?.name || '火山白'}
+          {themeOptions.find((o) => o.id === currentThemeName)?.name || '科技浅蓝'}
           </span>
         </div>
         <span
@@ -147,16 +154,13 @@ export function ResetSettingsButton() {
   const apiStore = useApiStore();
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   const handleReset = () => {
     // 重置主题
     setTheme('volcano-white');
-
     // 重置API配置（清除所有提供商的配置）
-    const providers = ['openai', 'claude', 'gemini', 'ernie', 'qwen', 'zhipu', 'minimax', 'kimi', 'openrouter', 'custom'] as const;
-    providers.forEach((p) => apiStore.setConfig(p, null));
+    ALL_PROVIDERS.forEach((p) => apiStore.setConfig(p, null));
     apiStore.setActiveProvider('openai');
 
     // 清除本地存储中的相关数据
@@ -223,7 +227,10 @@ export function ResetSettingsButton() {
         border: `1px solid ${themeColors?.error}40`,
       }}
     >
-      🗑️ 恢复默认设置
+      <span className="inline-flex items-center justify-center gap-2">
+        <Trash2 size={16} aria-hidden="true" />
+        恢复默认设置
+      </span>
     </button>
   );
 }

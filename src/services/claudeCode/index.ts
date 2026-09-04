@@ -47,6 +47,7 @@ export async function claudeChat(
     maxTokens?: number;       // 最大token数（可选）
     timeout?: number;         // 超时时间（可选）
     provider?: string;        // 强制使用特定provider（可选）
+    signal?: AbortSignal;     // 允许上层取消请求（可选）
   } = {}
 ): Promise<ClaudeCodeResponse> {
   // 构建完整消息列表
@@ -76,9 +77,12 @@ export async function claudeChat(
 async function tryCliMode(
   message: string,
   sessionHistory: { role: 'user' | 'assistant'; content: string }[],
-  options: { systemPrompt?: string; model?: string }
+  options: { systemPrompt?: string; model?: string; signal?: AbortSignal }
 ): Promise<Omit<ClaudeCodeResponse, 'provider'>> {
   try {
+    if (options.signal?.aborted) {
+      return { success: false, error: '请求已取消' };
+    }
     // 检查CLI是否可用
     const cliInstalled = await isClaudeCodeInstalled();
     if (!cliInstalled) {
@@ -107,6 +111,10 @@ async function tryCliMode(
     const command = Command.create('npx', ['claude', ...args]);
     const output = await command.execute();
 
+    if (options.signal?.aborted) {
+      return { success: false, error: '请求已取消' };
+    }
+
     if (output.code === 0 && output.stdout) {
       return { success: true, output: output.stdout.toString().trim() };
     }
@@ -132,6 +140,7 @@ async function tryApiMode(
     maxTokens?: number;
     timeout?: number;
     provider?: string;
+    signal?: AbortSignal;
   }
 ): Promise<ClaudeCodeResponse> {
   const timeout = options.timeout || API_TIMEOUT;
@@ -141,7 +150,7 @@ async function tryApiMode(
     const { apiGateway } = await import('@/services/api/gateway');
 
     // 检查API配置
-    const validation = apiGateway.validateConfig();
+    const validation = await apiGateway.validateConfig();
     if (!validation.valid) {
       return {
         success: false,
@@ -164,12 +173,14 @@ async function tryApiMode(
 
     // 调用API Gateway（带超时和重试）
     const result = await callApiWithRetry(
-      () => apiGateway.chat({
+      (signal) => apiGateway.chat({
         messages: apiMessages,
         temperature: options.temperature,
         maxTokens: options.maxTokens,
-      }),
-      timeout
+      }, signal),
+      timeout,
+      0,
+      options.signal
     );
 
     // 解析响应
@@ -220,16 +231,20 @@ async function tryApiMode(
  * 带重试的API调用
  */
 async function callApiWithRetry(
-  apiCall: () => Promise<Response>,
+  apiCall: (signal: AbortSignal) => Promise<Response>,
   timeout: number,
-  retryCount: number = 0
+  retryCount: number = 0,
+  externalSignal?: AbortSignal
 ): Promise<Response> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const abortFromCaller = () => controller.abort();
+    if (externalSignal?.aborted) controller.abort();
+    else externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
 
     try {
-      const response = await apiCall();
+      const response = await apiCall(controller.signal);
       clearTimeout(timeoutId);
       return response;
     } catch (error: unknown) {
@@ -244,10 +259,13 @@ async function callApiWithRetry(
       if (isRetryable && retryCount < MAX_RETRIES) {
         console.log(`[ClaudeChat] API调用失败，${retryCount + 1}秒后重试...`);
         await sleep((retryCount + 1) * 1000);
-        return callApiWithRetry(apiCall, timeout, retryCount + 1);
+        return callApiWithRetry(apiCall, timeout, retryCount + 1, externalSignal);
       }
 
       throw error;
+    } finally {
+      clearTimeout(timeoutId);
+      externalSignal?.removeEventListener('abort', abortFromCaller);
     }
   } catch (error) {
     throw error;

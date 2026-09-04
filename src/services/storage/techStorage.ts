@@ -5,7 +5,13 @@ const STORAGE_KEY = 'tech_results';
 export const techStorage = {
   getAll(): TechResult[] {
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    try {
+      const parsed: unknown = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed as TechResult[] : [];
+    } catch {
+      return [];
+    }
   },
 
   save(result: TechResult) {
@@ -17,6 +23,19 @@ export const techStorage = {
       results.push(result);
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
+  },
+
+  replaceAll(results: TechResult[]) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
+  },
+
+  renameGroup(currentName: string, nextName: string): TechResult[] {
+    const now = new Date().toISOString();
+    const results = this.getAll().map((result) => result.group?.trim() === currentName
+      ? { ...result, group: nextName.trim(), updatedAt: now }
+      : result);
+    this.replaceAll(results);
+    return results;
   },
 
   delete(id: string) {

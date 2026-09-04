@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
 import { claudeChat, isClaudeCodeInstalled, type ClaudeCodeResponse } from '@/services/claudeCode';
 
 interface TerminalLine {
@@ -38,8 +38,7 @@ export function TerminalPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   // Check Claude Code CLI availability on mount
   useEffect(() => {

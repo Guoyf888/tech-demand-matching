@@ -1,5 +1,5 @@
 /**
- * Hermes Skills Service - 融合hermes-agent-main (v0.11.0) 技能系统
+ * Hermes Skills Service - 兼容 hermes-agent v0.19.0 技能系统
  *
  * 支持:
  * - Hermes SKILL.md格式 (YAML frontmatter)
@@ -10,6 +10,7 @@
  */
 
 import { Skill } from '@/types';
+import { parseSkillFrontmatter } from '@/services/skills/skillFrontmatter';
 
 // 平台映射
 const PLATFORM_MAP: Record<string, string> = {
@@ -33,6 +34,8 @@ export interface HermesSkillMeta {
   author?: string;
   license?: string;
   platforms?: string[];
+  environments?: string[];
+  tags?: string[];
   prerequisites?: {
     env_vars?: string[];
     commands?: string[];
@@ -42,6 +45,10 @@ export interface HermesSkillMeta {
     hermes?: {
       tags?: string[];
       related_skills?: string[];
+      fallback_for_toolsets?: string[];
+      requires_toolsets?: string[];
+      fallback_for_tools?: string[];
+      requires_tools?: string[];
       config?: Array<{
         key: string;
         description: string;
@@ -82,6 +89,10 @@ export interface HermesSkillMeta {
     required_for?: string;
     optional?: boolean;
   }>;
+  required_credential_files?: Array<{
+    path: string;
+    description?: string;
+  }>;
 }
 
 // Skill文件信息
@@ -99,81 +110,8 @@ export interface SkillFileInfo {
 
 // 解析YAML frontmatter
 function parseFrontmatter(content: string): { metadata: HermesSkillMeta; content: string } {
-  const lines = content.split('\n');
-  let frontmatterEnd = -1;
-  const metadata: HermesSkillMeta = { name: '', description: '' };
-
-  if (lines[0]?.trim() === '---') {
-    for (let i = 1; i < lines.length; i++) {
-      if (lines[i]?.trim() === '---') {
-        frontmatterEnd = i;
-        break;
-      }
-
-      const line = lines[i];
-      const colonIndex = line.indexOf(':');
-
-      if (colonIndex > 0) {
-        const key = line.substring(0, colonIndex).trim();
-        let value = line.substring(colonIndex + 1).trim();
-
-        // Handle YAML array format
-        if (value.startsWith('[') && value.endsWith(']')) {
-          value = value.slice(1, -1);
-        }
-
-        switch (key) {
-          case 'name':
-          case 'description':
-          case 'version':
-          case 'author':
-          case 'license':
-          case 'compatibility':
-            (metadata as unknown as Record<string, unknown>)[key] = value;
-            break;
-          case 'platforms':
-            metadata.platforms = value.split(',').map(s => s.trim());
-            break;
-          case 'prerequisites':
-            // 解析prerequisites块
-            try {
-              const preContent = lines.slice(i + 1).join('\n');
-              const envMatch = preContent.match(/env_vars:\s*\[([^\]]*)\]/);
-              const cmdMatch = preContent.match(/commands:\s*\[([^\]]*)\]/);
-              if (!metadata.prerequisites) metadata.prerequisites = {};
-              if (envMatch) metadata.prerequisites.env_vars = envMatch[1].split(',').map(s => s.trim());
-              if (cmdMatch) metadata.prerequisites.commands = cmdMatch[1].split(',').map(s => s.trim());
-            } catch { /* ignore */ }
-            break;
-          case 'metadata':
-            // 解析metadata.hermes块
-            try {
-              const metaContent = lines.slice(i + 1).join('\n');
-              const hermesMatch = metaContent.match(/hermes:\s*\n([\s\S]*?)(?=^[a-z]|\n---)/m);
-              if (hermesMatch) {
-                const hermesData: Record<string, unknown> = {};
-                hermesMatch[1].split('\n').forEach((metaLine: string) => {
-                  const [k, ...vParts] = metaLine.split(':');
-                  if (k && vParts.length) {
-                    hermesData[k.trim()] = vParts.join(':').trim();
-                  }
-                });
-                if (!metadata.metadata) metadata.metadata = {};
-                if (!metadata.metadata.hermes) metadata.metadata.hermes = {};
-                Object.assign(metadata.metadata.hermes, hermesData);
-              }
-            } catch { /* ignore */ }
-            break;
-        }
-      }
-    }
-  }
-
-  const skillContent = frontmatterEnd >= 0
-    ? lines.slice(frontmatterEnd + 1).join('\n').trim()
-    : content;
-
-  return { metadata, content: skillContent };
+  const parsed = parseSkillFrontmatter(content, { name: '', description: '' } as HermesSkillMeta);
+  return { metadata: parsed.metadata, content: parsed.content };
 }
 
 // 检查平台兼容性

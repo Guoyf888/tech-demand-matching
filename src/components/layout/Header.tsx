@@ -1,13 +1,12 @@
 import { Link } from 'react-router-dom';
 import { RoleSwitcher } from '@/components/common/RoleSwitcher';
 import { useRoleStore } from '@/store/roleStore';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
 
 export function Header() {
   const { currentRole, setRole } = useRoleStore();
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   return (
     <header

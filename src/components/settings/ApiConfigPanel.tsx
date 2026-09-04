@@ -1,54 +1,50 @@
-import { useState } from 'react';
-import { Provider, ApiConfig } from '@/services/api/types';
+import { useEffect, useState } from 'react';
 import { useApiStore } from '@/store/apiStore';
 import { apiGateway } from '@/services/api/gateway';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
+import { PROVIDER_META, type Provider } from '@/config/providers';
+import { secretStore } from '@/utils/secretStore';
+import { LockKeyhole } from 'lucide-react';
 
-const providers: { id: Provider; name: string; placeholder: string; baseUrl?: string }[] = [
-  { id: 'openai', name: 'OpenAI', placeholder: 'sk-...', baseUrl: 'https://api.openai.com' },
-  { id: 'claude', name: 'Claude', placeholder: 'sk-ant-...', baseUrl: 'https://api.anthropic.com' },
-  { id: 'qwen', name: '阿里Qwen', placeholder: 'API Key', baseUrl: 'https://dashscope.aliyuncs.com' },
-  { id: 'ernie', name: '百度文心', placeholder: 'API Key', baseUrl: 'https://qianfan.baidubce.com' },
-  { id: 'zhipu', name: '智谱GLM', placeholder: 'API Key', baseUrl: 'https://open.bigmodel.cn' },
-  { id: 'minimax', name: 'MiniMax', placeholder: 'API Key', baseUrl: 'https://api.minimax.chat' },
-  { id: 'kimi', name: 'Kimi', placeholder: 'API Key', baseUrl: 'https://api.moonshot.cn' },
-  { id: 'mimo', name: '小米MiMo', placeholder: 'API Key', baseUrl: 'https://api.xiaomi.com' },
-  { id: 'sensenova', name: '商汤日日新', placeholder: 'API Key', baseUrl: 'https://api.sensenova.cn' },
-  { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...', baseUrl: 'https://openrouter.ai' },
-  { id: 'custom', name: '自定义', placeholder: 'API Key' },
-];
+const providerList = (Object.values(PROVIDER_META) as Array<{ id: Provider; name: string; placeholder?: string; baseUrl?: string }>)
+  .filter((p) => p.id !== 'gemini' || p.baseUrl)
+  .map((p) => ({ id: p.id, name: p.name, placeholder: p.placeholder ?? 'API Key', baseUrl: p.baseUrl }));
 
 export function ApiConfigPanel() {
   const { configs, activeProvider, setConfig, setActiveProvider } = useApiStore();
 
   const currentConfig = configs[activeProvider];
-  const [apiKey, setApiKey] = useState(currentConfig?.apiKey || '');
-  const [baseUrl, setBaseUrl] = useState(currentConfig?.baseUrl || providers.find(p => p.id === activeProvider)?.baseUrl || '');
+  const [apiKey, setApiKey] = useState(''); // 实际值来自 Keychain
+  const [baseUrl, setBaseUrl] = useState(currentConfig?.baseUrl || providerList.find(p => p.id === activeProvider)?.baseUrl || '');
   const [modelId, setModelId] = useState(currentConfig?.modelId || '');
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [hasSavedKey, setHasSavedKey] = useState(false);
 
-  const currentTheme = useThemeStore(s => s.getEffectiveTheme());
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
-  const selectedProvider = providers.find(p => p.id === activeProvider);
+  const selectedProvider = providerList.find(p => p.id === activeProvider);
+
+  // 从 Keychain 拉取当前 provider 的 API Key；切换 provider 时重新加载
+  useEffect(() => {
+    let cancelled = false;
+    void secretStore.get(activeProvider).then((value) => {
+      if (cancelled) return;
+      setApiKey(value ?? '');
+      setHasSavedKey(value !== null && value.length > 0);
+    });
+    return () => { cancelled = true; };
+  }, [activeProvider, currentConfig?.baseUrl, currentConfig?.modelId]);
 
   /**
    * 验证配置输入
    */
   const validateInput = (): string | null => {
-    if (!apiKey.trim()) {
-      return '请输入API Key';
-    }
-    if (!baseUrl.trim()) {
-      return '请输入API地址';
-    }
-    if (!modelId.trim()) {
-      return '请输入模型ID';
-    }
-    // 验证URL格式
+    if (!apiKey.trim()) return '请输入API Key';
+    if (!baseUrl.trim()) return '请输入API地址';
+    if (!modelId.trim()) return '请输入模型ID';
     try {
       new URL(baseUrl);
     } catch {
@@ -57,7 +53,7 @@ export function ApiConfigPanel() {
     return null;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const error = validateInput();
     if (error) {
       setValidationError(error);
@@ -67,13 +63,14 @@ export function ApiConfigPanel() {
 
     setValidationError(null);
 
-    const config: ApiConfig = {
-      provider: activeProvider,
-      apiKey: apiKey.trim(),
+    // 元数据持久化到 localStorage（不含 apiKey）
+    setConfig(activeProvider, {
       baseUrl: baseUrl.trim(),
       modelId: modelId.trim(),
-    };
-    setConfig(activeProvider, config);
+    });
+    // apiKey 单独写入 Keychain
+    await secretStore.save(activeProvider, apiKey.trim());
+    setHasSavedKey(true);
     setSaved(true);
     setTestResult(null);
     setTimeout(() => setSaved(false), 2000);
@@ -91,14 +88,12 @@ export function ApiConfigPanel() {
     setTestResult(null);
 
     try {
-      const config: ApiConfig = {
-        provider: activeProvider,
-        apiKey: apiKey.trim(),
+      // 先写入内存 + Keychain
+      setConfig(activeProvider, {
         baseUrl: baseUrl.trim(),
         modelId: modelId.trim(),
-      };
-      // 先保存配置
-      setConfig(activeProvider, config);
+      });
+      await secretStore.save(activeProvider, apiKey.trim());
 
       // 测试连接
       const response = await apiGateway.chat({
@@ -120,8 +115,6 @@ export function ApiConfigPanel() {
       }
     } catch (e: any) {
       let errorMsg = e.message || '未知错误';
-
-      // 优化错误提示
       if (errorMsg.includes('401') || errorMsg.includes('Unauthorized') || errorMsg.includes('无效')) {
         errorMsg = 'API密钥无效或已过期，请检查API Key是否正确';
       } else if (errorMsg.includes('403') || errorMsg.includes('Forbidden') || errorMsg.includes('拒绝')) {
@@ -131,7 +124,6 @@ export function ApiConfigPanel() {
       } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
         errorMsg = '网络连接失败，请检查API地址是否正确，或需要代理';
       }
-
       setTestResult({ success: false, message: `连接失败: ${errorMsg}` });
     } finally {
       setTesting(false);
@@ -154,6 +146,20 @@ export function ApiConfigPanel() {
         </div>
       )}
 
+      {/* 存储后端提示 */}
+      <div
+        className="p-2 rounded text-xs"
+        style={{
+          backgroundColor: themeColors?.primaryLight,
+          color: themeColors?.primary,
+        }}
+      >
+        <span className="inline-flex items-center gap-2">
+          <LockKeyhole size={15} aria-hidden="true" />
+          API Key 存储于：{secretStore.isUsingKeychain() ? `系统钥匙串（${hasSavedKey ? '已配置' : '未配置'}）` : '本地存储（降级模式）'}
+        </span>
+      </div>
+
       {/* Provider Selection */}
       <div>
         <label
@@ -163,13 +169,12 @@ export function ApiConfigPanel() {
           选择模型提供商
         </label>
         <div className="grid grid-cols-4 gap-2">
-          {providers.map((p) => (
+          {providerList.map((p) => (
             <button
               key={p.id}
               onClick={() => {
                 setActiveProvider(p.id);
                 setBaseUrl(p.baseUrl || '');
-                setApiKey(configs[p.id]?.apiKey || '');
                 setModelId(configs[p.id]?.modelId || '');
                 setValidationError(null);
                 setTestResult(null);
@@ -194,6 +199,7 @@ export function ApiConfigPanel() {
           style={{ color: themeColors?.text }}
         >
           API Key
+          {hasSavedKey && <span style={{ color: themeColors?.success, marginLeft: 8 }}>✓ 已保存</span>}
         </label>
         <input
           type="password"
@@ -215,7 +221,7 @@ export function ApiConfigPanel() {
           className="text-xs mt-1"
           style={{ color: themeColors?.textHint }}
         >
-          {selectedProvider?.name} 的API密钥，请从官网获取
+          {selectedProvider?.name} 的API密钥，将加密存入系统钥匙串
         </p>
       </div>
 
@@ -267,18 +273,7 @@ export function ApiConfigPanel() {
             setValidationError(null);
             setTestResult(null);
           }}
-          placeholder={
-            activeProvider === 'openai' ? 'gpt-4o' :
-            activeProvider === 'claude' ? 'claude-3-5-sonnet-latest' :
-            activeProvider === 'qwen' ? 'qwen-plus' :
-            activeProvider === 'ernie' ? 'ernie-4.0-8k' :
-            activeProvider === 'zhipu' ? 'glm-4' :
-            activeProvider === 'minimax' ? 'abab6-chat' :
-            activeProvider === 'kimi' ? 'moonshot-v1-8k' :
-            activeProvider === 'mimo' ? 'MiMo-7B' :
-            activeProvider === 'sensenova' ? 'SenseChat-5' :
-            '模型ID'
-          }
+          placeholder={PROVIDER_META[activeProvider]?.defaultModel ?? '模型ID'}
           className="input"
           style={{
             backgroundColor: themeColors?.surface,

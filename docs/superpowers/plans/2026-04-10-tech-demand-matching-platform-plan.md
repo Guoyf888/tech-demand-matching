@@ -1,8 +1,8 @@
-# 技术需求智能对接系统 - 实施计划
+# AI技术经理人 - 实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 构建一个基于 Tauri 的桌面应用，实现技术经理人技术需求智能对接系统，支持企业（需求方）、高校/科研院所（技术方）、服务机构（平台方）三方对接
+**Goal:** 构建一个基于 Tauri 的 AI技术经理人桌面应用，支持企业（需求方）、高校/科研院所（技术方）、服务机构（平台方）三方对接
 
 **Architecture:** Tauri 桌面应用（React + TypeScript 前端 + Rust 后端），借鉴 Hermes Agent 的技能系统和记忆持久化设计
 
@@ -196,7 +196,7 @@ export default {
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>技术需求智能对接系统</title>
+    <title>AI技术经理人</title>
   </head>
   <body>
     <div id="root"></div>
@@ -261,7 +261,7 @@ function App() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <header className="bg-white dark:bg-gray-800 shadow">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold">技术需求智能对接系统</h1>
+          <h1 className="text-2xl font-bold">AI技术经理人</h1>
         </div>
       </header>
       <main className="max-w-7xl mx-auto px-4 py-8">
@@ -280,7 +280,7 @@ export default App;
 [package]
 name = "tech-demand-matching"
 version = "1.0.0"
-description = "技术需求智能对接系统"
+description = "AI技术经理人"
 authors = ["you"]
 edition = "2021"
 
@@ -300,7 +300,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 ```json
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "技术需求智能对接系统",
+  "productName": "AI技术经理人",
   "version": "1.0.0",
   "identifier": "com.techdemand.app",
   "build": {
@@ -312,7 +312,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
   "app": {
     "windows": [
       {
-        "title": "技术需求智能对接系统",
+        "title": "AI技术经理人",
         "width": 1280,
         "height": 800,
         "minWidth": 1024,
@@ -353,7 +353,7 @@ fn main() {
 - [ ] **Step 13: 初始化项目并安装依赖**
 
 ```bash
-cd c:/Codes/jishujingliren
+cd tech-demand-matching
 npm install
 cd src-tauri && cargo build
 ```
@@ -897,7 +897,7 @@ export function SettingsPage() {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
         <h3 className="text-lg font-semibold mb-4">关于</h3>
         <p className="text-gray-600 dark:text-gray-400">
-          技术需求智能对接系统 v1.0.0
+          AI技术经理人 v1.0.0
           <br />
           基于 Tauri + React 构建
         </p>
@@ -1521,7 +1521,7 @@ export function TechUpload({ onUploaded }: TechUploadProps) {
           disabled={!title.trim() || !content.trim() || isProcessing}
           className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
         >
-          {isProcessing ? '处理中...' : '上传并分析'}
+          {isProcessing ? '处理中...' : '提交分析'}
         </button>
       </div>
     </div>

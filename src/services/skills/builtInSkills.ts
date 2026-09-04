@@ -242,9 +242,12 @@ You are a data analyst specializing in technology and business metrics. Analyze 
 
 export function getBuiltInSkills(): Skill[] {
   const stored = skillStore.getAll();
-  if (stored.length === 0) {
-    builtInSkills.forEach((s) => skillStore.save(s));
-    return builtInSkills;
+  const storedIds = new Set(stored.map((skill) => skill.id));
+  const missingBuiltIns = builtInSkills.filter((skill) => !storedIds.has(skill.id));
+
+  for (const skill of missingBuiltIns) {
+    skillStore.save(skill);
   }
-  return stored;
+
+  return [...stored, ...missingBuiltIns];
 }

@@ -23,7 +23,6 @@ import {
   Cog,
   Store,
   Award,
-  Users,
   Puzzle,
 } from 'lucide-react';
 import { useThemeStore } from '@/store/themeStore';
@@ -62,12 +61,6 @@ const NAV_ITEMS: NavItem[] = [
         icon: <Store size={16} strokeWidth={1.75} />,
         path: '/demand-square',
       },
-      {
-        id: 'reports',
-        label: '分析报告',
-        icon: <FileText size={16} strokeWidth={1.75} />,
-        path: '/reports',
-      },
     ],
   },
   {
@@ -88,12 +81,6 @@ const NAV_ITEMS: NavItem[] = [
         icon: <Award size={16} strokeWidth={1.75} />,
         path: '/tech-square',
       },
-      {
-        id: 'team',
-        label: '团队展示',
-        icon: <Users size={16} strokeWidth={1.75} />,
-        path: '/team',
-      },
     ],
   },
   {
@@ -101,12 +88,6 @@ const NAV_ITEMS: NavItem[] = [
     label: '智能匹配',
     icon: <Handshake size={20} strokeWidth={1.75} />,
     path: '/matching',
-  },
-  {
-    id: 'cooperations',
-    label: '合作管理',
-    icon: <Users size={20} strokeWidth={1.75} />,
-    path: '/cooperations',
   },
   {
     id: 'skills',
@@ -151,19 +132,22 @@ export function AppSidebar() {
   const renderNavItem = (item: NavItem, level: number = 0) => {
     const hasChildren = item.children && item.children.length > 0;
     const isExpanded = expandedItems.includes(item.id);
-    const active = isActive(item.path);
+    const active = isActive(item.path) || Boolean(item.children?.some((child) => isActive(child.path)));
 
     return (
       <div key={item.id} className="nav-item-wrapper">
         <button
           className={`nav-item ${active ? 'active' : ''} ${level > 0 ? 'nav-item-sub' : ''}`}
           onClick={() => {
-            if (hasChildren) {
+            const compactNavigation = window.matchMedia('(max-width: 768px)').matches;
+            if (hasChildren && !compactNavigation) {
               toggleExpand(item.id);
             } else {
               navigate(item.path);
             }
           }}
+          aria-current={isActive(item.path) ? 'page' : undefined}
+          aria-expanded={hasChildren ? isExpanded : undefined}
           style={level > 0 ? { paddingLeft: `${16 + level * 12}px` } : undefined}
           title={collapsed ? item.label : undefined}
         >
@@ -203,7 +187,7 @@ export function AppSidebar() {
         <div className="logo-icon-wrapper">
           <Bot size={22} className="logo-icon" />
         </div>
-        {!collapsed && <span className="logo-text">技术对接平台</span>}
+        {!collapsed && <span className="logo-text">AI技术经理人</span>}
       </div>
 
       {/* 导航列表 */}

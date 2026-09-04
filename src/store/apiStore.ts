@@ -1,55 +1,37 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Provider, ApiConfig } from '@/services/api/types';
-import { encodeData, decodeData } from '@/utils/encryptedStorage';
+import {
+  ALL_PROVIDERS,
+  DEFAULT_ACTIVE_PROVIDER,
+  emptyProviderConfigs,
+  type Provider,
+} from '@/config/providers';
+import { secretStore } from '@/utils/secretStore';
 
 const STORAGE_KEY = 'api-config-storage';
 
-const obfuscatedStorage: Storage = {
-  getItem(key: string): string | null {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    // Try decoding; if it's legacy plaintext, return as-is
-    const decoded = decodeData(raw);
-    return decoded || raw;
-  },
-  setItem(key: string, value: string): void {
-    localStorage.setItem(key, encodeData(value));
-  },
-  removeItem(key: string): void {
-    localStorage.removeItem(key);
-  },
-  get length() { return localStorage.length; },
-  clear(): void { localStorage.removeItem(STORAGE_KEY); },
-  key(index: number): string | null { return localStorage.key(index); },
-};
+/**
+ * 持久化的 Provider 元数据（不含 apiKey）
+ * apiKey 通过 secretStore 单独存取（OS Keychain 优先，localStorage 降级）
+ */
+export interface PersistedProviderConfig {
+  baseUrl?: string;
+  modelId: string;
+}
 
 interface ApiState {
-  configs: Record<Provider, ApiConfig | null>;
+  configs: Record<Provider, PersistedProviderConfig | null>;
   activeProvider: Provider;
-  setConfig: (provider: Provider, config: ApiConfig | null) => void;
+  setConfig: (provider: Provider, config: PersistedProviderConfig | null) => void;
   setActiveProvider: (provider: Provider) => void;
-  getActiveConfig: () => ApiConfig | null;
+  getActiveConfig: () => PersistedProviderConfig | null;
 }
 
 export const useApiStore = create<ApiState>()(
   persist(
     (set, get) => ({
-      configs: {
-        openai: null,
-        claude: null,
-        gemini: null,
-        ernie: null,
-        qwen: null,
-        zhipu: null,
-        minimax: null,
-        kimi: null,
-        openrouter: null,
-        custom: null,
-        mimo: null,
-        sensenova: null,
-      },
-      activeProvider: 'openai',
+      configs: emptyProviderConfigs() as unknown as Record<Provider, PersistedProviderConfig | null>,
+      activeProvider: DEFAULT_ACTIVE_PROVIDER,
       setConfig: (provider, config) =>
         set((state) => ({
           configs: { ...state.configs, [provider]: config },
@@ -62,7 +44,31 @@ export const useApiStore = create<ApiState>()(
     }),
     {
       name: STORAGE_KEY,
-      storage: createJSONStorage(() => obfuscatedStorage),
+      storage: createJSONStorage(() => localStorage),
+      version: 2,
+      migrate: (persistedState: unknown) => {
+        // v1 -> v2：剥离 apiKey
+        if (!persistedState || typeof persistedState !== 'object') return persistedState as ApiState;
+        const s = persistedState as { configs?: Record<string, { apiKey?: string; baseUrl?: string; modelId?: string } | null> };
+        if (s.configs) {
+          // 在迁移过程中，把旧 v1 数据里的 apiKey 同步转移到 secretStore
+          for (const [provider, cfg] of Object.entries(s.configs)) {
+            if (cfg && typeof cfg.apiKey === 'string' && cfg.apiKey.length > 0) {
+              void secretStore.save(provider, cfg.apiKey);
+            }
+          }
+          // 从持久化数据中移除 apiKey 字段
+          for (const cfg of Object.values(s.configs)) {
+            if (cfg) {
+              delete (cfg as { apiKey?: string }).apiKey;
+            }
+          }
+        }
+        return persistedState as ApiState;
+      },
     }
   )
 );
+
+export type { Provider };
+export { ALL_PROVIDERS };

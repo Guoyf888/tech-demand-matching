@@ -1,6 +1,6 @@
 /**
  * 版本日志更新脚本
- * 用法: node scripts/updateVersionLog.js "更新描述1" "更新描述2" ...
+ * 用法: node scripts/updateVersionLog.cjs "更新描述1" "更新描述2" ...
  */
 
 const fs = require('fs');
@@ -14,11 +14,11 @@ function getCurrentVersion() {
   const logs = JSON.parse(fs.readFileSync(LOG_FILE, 'utf-8'));
   if (!Array.isArray(logs) || logs.length === 0) return 'v1.0.0';
 
-  const lastVersion = logs[logs.length - 1].version;
-  const match = lastVersion.match(/v(\d+)\.(\d+)\.(\d+)/);
+  const latestVersion = logs[0].version;
+  const match = latestVersion.match(/v(\d+)\.(\d+)\.(\d+)/);
   if (!match) return 'v1.0.0';
 
-  return lastVersion;
+  return latestVersion;
 }
 
 function incrementVersion(version) {
@@ -61,7 +61,7 @@ function updateVersionLog(contents) {
     content: contents
   };
 
-  logs.push(newEntry);
+  logs.unshift(newEntry);
 
   fs.writeFileSync(LOG_FILE, JSON.stringify(logs, null, 2), 'utf-8');
 
@@ -75,8 +75,8 @@ function updateVersionLog(contents) {
 const args = process.argv.slice(2);
 
 if (args.length === 0) {
-  console.log('用法: node scripts/updateVersionLog.js "更新描述1" "更新描述2" ...');
-  console.log('示例: node scripts/updateVersionLog.js "修复了登录bug" "优化了界面样式"');
+  console.log('用法: node scripts/updateVersionLog.cjs "更新描述1" "更新描述2" ...');
+  console.log('示例: node scripts/updateVersionLog.cjs "修复了登录bug" "优化了界面样式"');
   process.exit(1);
 }
 

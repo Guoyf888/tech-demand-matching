@@ -10,8 +10,39 @@
 
 import { Skill } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { parseSkillFrontmatter } from '@/services/skills/skillFrontmatter';
 
 const SKILLS_STORAGE_KEY = 'hermes-skills';
+
+/**
+ * Decode uploaded skill files before parsing. Most packages are UTF-8, while
+ * skills created by older Windows editors can still be GBK/GB18030.
+ */
+export function decodeSkillText(source: ArrayBuffer | Uint8Array | ArrayLike<number | string>): string {
+  const bytes = source instanceof Uint8Array
+    ? source
+    : source instanceof ArrayBuffer
+      ? new Uint8Array(source)
+      : Uint8Array.from(Array.from(source, (value) => typeof value === 'string' ? value.charCodeAt(0) : value));
+  if (bytes.length === 0) return '';
+
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+  }
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+  }
+
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    try {
+      return new TextDecoder('gb18030', { fatal: true }).decode(bytes);
+    } catch {
+      return new TextDecoder('utf-8').decode(bytes);
+    }
+  }
+}
 
 /**
  * 规范化文本编码为UTF-8
@@ -98,6 +129,8 @@ export interface HermesSkillMeta {
   author?: string;
   license?: string;
   platforms?: string[];
+  environments?: string[];
+  tags?: string[];
   prerequisites?: {
     env_vars?: string[];
     commands?: string[];
@@ -107,6 +140,12 @@ export interface HermesSkillMeta {
     hermes?: {
       tags?: string[];
       related_skills?: string[];
+      config?: Array<{
+        key: string;
+        description: string;
+        default?: string;
+        prompt?: string;
+      }>;
     };
     openclaw?: {
       emoji?: string;
@@ -123,70 +162,16 @@ export interface HermesSkillMeta {
       }>;
     };
   };
+  required_environment_variables?: Array<{
+    name: string;
+    optional?: boolean;
+  }>;
 }
 
 // Parse frontmatter from SKILL.md
 function parseFrontmatter(content: string): { metadata: HermesSkillMeta; content: string } {
-  const lines = content.split('\n');
-  let frontmatterEnd = -1;
-  const metadata: HermesSkillMeta = { name: '', description: '' };
-
-  if (lines[0]?.trim() === '---') {
-    for (let i = 1; i < lines.length; i++) {
-      if (lines[i]?.trim() === '---') {
-        frontmatterEnd = i;
-        break;
-      }
-
-      const line = lines[i];
-      const colonIndex = line.indexOf(':');
-
-      if (colonIndex > 0) {
-        const key = line.substring(0, colonIndex).trim();
-        let value = line.substring(colonIndex + 1).trim();
-
-        // Handle YAML array format like: tags: [fine-tuning, llm]
-        if (value.startsWith('[') && value.endsWith(']')) {
-          value = value.slice(1, -1);
-        }
-
-        // Map common fields
-        switch (key) {
-          case 'name':
-          case 'description':
-          case 'version':
-          case 'author':
-          case 'license':
-          case 'platforms':
-          case 'compatibility':
-            (metadata as unknown as Record<string, unknown>)[key] = value;
-            break;
-          case 'metadata':
-            try {
-              const metaContent = lines.slice(i + 1).join('\n');
-              const metaMatch = metaContent.match(/hermes:\s*\n([\s\S]*?)(?=^[a-z]|\n---)/m);
-              if (metaMatch) {
-                const hermesData: Record<string, unknown> = {};
-                metaMatch[1].split('\n').forEach((metaLine: string) => {
-                  const [k, v] = metaLine.split(':').map(s => s.trim());
-                  if (k && v) hermesData[k] = v;
-                });
-                (metadata as unknown as Record<string, unknown>).metadata = { hermes: hermesData };
-              }
-            } catch {
-              // Ignore metadata parse errors
-            }
-            break;
-        }
-      }
-    }
-  }
-
-  const skillContent = frontmatterEnd >= 0
-    ? lines.slice(frontmatterEnd + 1).join('\n').trim()
-    : content;
-
-  return { metadata, content: skillContent };
+  const parsed = parseSkillFrontmatter(content, { name: '', description: '' } as HermesSkillMeta);
+  return { metadata: parsed.metadata, content: parsed.content };
 }
 
 // Detect icon from content
@@ -295,7 +280,19 @@ export async function parseSkillFileInternal(filename: string, content: string):
 
     const skillId = `skill_${uuidv4().slice(0, 8)}`;
     const icon = detectIconFromContent(skillContent, filename);
-    const triggers = extractTriggers(skillContent);
+    const metadataTags = skillData.metadata?.hermes?.tags || skillData.tags || [];
+    const triggers = Array.from(new Set([...metadataTags, ...extractTriggers(skillContent)]));
+    const requiredEnv = [
+      ...(skillData.prerequisites?.env_vars || []),
+      ...(skillData.metadata?.openclaw?.requires?.env || []),
+      ...(skillData.required_environment_variables || [])
+        .filter(variable => !variable.optional)
+        .map(variable => variable.name),
+    ];
+    const requiredBins = [
+      ...(skillData.prerequisites?.commands || []),
+      ...(skillData.metadata?.openclaw?.requires?.bins || []),
+    ];
 
     return {
       id: skillId,
@@ -319,6 +316,18 @@ export async function parseSkillFileInternal(filename: string, content: string):
       source: 'hermes',
       content: skillContent,
       triggers,
+      author: skillData.author,
+      prerequisites: {
+        bins: Array.from(new Set(requiredBins)),
+        env: Array.from(new Set(requiredEnv)),
+      },
+      hermes: {
+        platforms: skillData.platforms,
+        environments: skillData.environments,
+        tags: metadataTags,
+        relatedSkills: skillData.metadata?.hermes?.related_skills,
+        config: skillData.metadata?.hermes?.config,
+      },
     };
   } catch (error) {
     console.error(`Failed to parse skill file ${filename}:`, error);
@@ -359,7 +368,9 @@ export async function importSkillsFromZip(zipContent: ArrayBuffer): Promise<{
   try {
     const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
-    await zip.loadAsync(zipContent);
+    await zip.loadAsync(zipContent, {
+      decodeFileName: (bytes) => decodeSkillText(bytes),
+    });
 
     const files = Object.keys(zip.files);
 
@@ -391,7 +402,8 @@ export async function importSkillsFromZip(zipContent: ArrayBuffer): Promise<{
 
     for (const filename of skillFiles) {
       try {
-        const content = await zip.files[filename].async('string');
+        const bytes = await zip.files[filename].async('uint8array');
+        const content = decodeSkillText(bytes);
         const skill = await parseSkillFileInternal(filename, content);
 
         if (skill) {
@@ -401,33 +413,6 @@ export async function importSkillsFromZip(zipContent: ArrayBuffer): Promise<{
         }
       } catch {
         failed.push(filename);
-      }
-    }
-
-    // Also look for skills in nested directories (OpenClaw skill structure)
-    const directories = [...new Set(
-      skillFiles.map(f => f.split('/')[0]).filter(d => d && d !== '.')
-    )];
-
-    for (const dir of directories) {
-      const nestedFiles = files.filter(name =>
-        name.startsWith(dir + '/') &&
-        !name.includes('readme') &&
-        !name.includes('changelog') &&
-        (name.endsWith('.json') || name.endsWith('.md'))
-      );
-
-      for (const filename of nestedFiles) {
-        try {
-          const content = await zip.files[filename].async('string');
-          const skill = await parseSkillFileInternal(filename, content);
-
-          if (skill) {
-            imported.push(skill);
-          }
-        } catch {
-          failed.push(filename);
-        }
       }
     }
 

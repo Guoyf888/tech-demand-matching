@@ -56,24 +56,24 @@ export interface ThemeConfig {
 
 export const themes: Record<Exclude<Theme, 'system'>, ThemeConfig> = {
   'volcano-white': {
-    name: '火山白',
+    name: '科技浅蓝',
     isDark: false,
     colors: {
-      primary: '#0ea5e9',
-      primaryHover: '#0284c7',
-      primaryLight: '#e0f2fe',
-      aiPurple: '#8b5cf6',
-      aiPurpleLight: '#ede9fe',
-      background: '#fafafa',
-      backgroundAlt: '#f5f5f5',
+      primary: '#1685f8',
+      primaryHover: '#086ad8',
+      primaryLight: '#e6f3ff',
+      aiPurple: '#6d6bf3',
+      aiPurpleLight: '#eeefff',
+      background: '#f2f7fd',
+      backgroundAlt: '#eaf3fc',
       surface: '#ffffff',
-      surfaceHover: '#f0f9ff',
-      text: '#213547',
-      textSecondary: '#64748b',
-      textHint: '#94a3b8',
-      border: '#e2e8f0',
-      borderHover: '#cbd5e1',
-      accent: '#f97316',
+      surfaceHover: '#f0f7ff',
+      text: '#16324f',
+      textSecondary: '#58728d',
+      textHint: '#8aa0b5',
+      border: '#d7e6f5',
+      borderHover: '#a8c9ec',
+      accent: '#18bfd3',
       success: '#22c55e',
       successLight: '#dcfce7',
       warning: '#f59e0b',
@@ -200,6 +200,27 @@ export function getEffectiveTheme(theme: Theme): Exclude<Theme, 'system'> {
 export function getThemeColors(theme: Theme): ThemeConfig {
   const effectiveTheme = getEffectiveTheme(theme);
   return themes[effectiveTheme];
+}
+
+/**
+ * 订阅式 hook：返回当前主题的配色（自动响应主题切换）
+ *
+ * 调用方应使用此 hook 而非 useThemeStore.getState().getEffectiveTheme()，
+ * 后者在 render 阶段不会建立订阅，主题切换时不会触发重渲染。
+ */
+export function useThemeColors() {
+  const theme = useThemeStore((s) => s.theme);
+  const effectiveTheme = getEffectiveTheme(theme);
+  return themes[effectiveTheme].colors;
+}
+
+/**
+ * 订阅式 hook：返回当前主题是否为深色模式
+ */
+export function useThemeIsDark() {
+  const theme = useThemeStore((s) => s.theme);
+  const effectiveTheme = getEffectiveTheme(theme);
+  return themes[effectiveTheme].isDark;
 }
 
 interface ThemeState {

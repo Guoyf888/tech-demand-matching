@@ -1,9 +1,13 @@
 [package]
 name = "tech-demand-matching"
-version = "1.9.0"
-description = "技术需求智能对接系统"
+version = "2.1.7"
+description = "AI技术经理人"
 authors = ["Guoyf888"]
 edition = "2021"
+
+[lib]
+name = "tech_demand_matching"
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -13,3 +17,6 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+keyring = "2.3"

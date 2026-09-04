@@ -1,13 +1,22 @@
+import { useEffect, useState } from 'react';
 import { useApiStore } from '@/store/apiStore';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
+import { secretStore } from '@/utils/secretStore';
 
 export function Footer() {
-  const { configs, activeProvider } = useApiStore();
-  
+  const { activeProvider, configs } = useApiStore();
   const currentConfig = configs[activeProvider];
+  const themeColors = useThemeColors();
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  // API Key 已迁移到 Keychain，需异步探测
+  const [hasKey, setHasKey] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void secretStore.get(activeProvider).then((v) => {
+      if (!cancelled) setHasKey(v !== null && v.length > 0);
+    });
+    return () => { cancelled = true; };
+  }, [activeProvider, currentConfig]);
 
   return (
     <footer
@@ -21,15 +30,15 @@ export function Footer() {
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1">
-            {currentConfig?.apiKey ? '✅' : '⚠️'} 已连接 {activeProvider.toUpperCase()}
+            {hasKey ? '✅' : '⚠️'} 已连接 {activeProvider.toUpperCase()}
           </span>
           <span className="flex items-center gap-1">
-            🔑 {currentConfig?.apiKey ? 'API已配置' : 'API未配置'}
+            🔑 {hasKey ? 'API已配置' : 'API未配置'}
           </span>
-          <span>📦 本地存储</span>
+          <span>{secretStore.isUsingKeychain() ? '🔐 系统钥匙串' : '📦 本地存储'}</span>
         </div>
         <div>
-          <span>v1.0.0 | 技术需求智能对接系统</span>
+          <span>v2.1.7 | AI技术经理人</span>
         </div>
       </div>
     </footer>

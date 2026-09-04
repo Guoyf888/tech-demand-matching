@@ -17,6 +17,7 @@ export interface SearchRequest {
   query: string;           // 搜索关键词
   numResults?: number;     // 返回结果数量，默认10
   searchType?: 'general' | 'news' | 'companies' | 'patents';  // 搜索类型
+  signal?: AbortSignal;    // 允许上层取消超时请求
 }
 
 // 搜索响应
@@ -27,11 +28,16 @@ export interface SearchResponse {
   provider: string;        // 使用的搜索提供商
   totalResults?: number;    // 总结果数
   query: string;           // 原始查询
+  isMock?: boolean;        // 明确标记演示数据，禁止与真实检索混淆
 }
 
 // 企业信息搜索结果
 export interface CompanyResearchResult {
   companyName: string;
+  success?: boolean;
+  error?: string;
+  provider?: string;
+  isMock?: boolean;
   basicInfo?: {
     registrationNumber?: string;
     legalRepresentative?: string;
@@ -62,7 +68,7 @@ export interface ISearchProvider {
   search(request: SearchRequest): Promise<SearchResponse>;
 
   // 执行企业研究（综合搜索）
-  researchCompany(companyName: string): Promise<CompanyResearchResult>;
+  researchCompany(companyName: string, signal?: AbortSignal): Promise<CompanyResearchResult>;
 
   // 检查配置是否有效
   isConfigured(): boolean;

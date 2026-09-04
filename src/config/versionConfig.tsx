@@ -12,9 +12,9 @@ export interface VersionInfo {
 
 // 初始版本信息
 const INIT_VERSION: VersionInfo = {
-  version: 'v2.0.1',
-  updateTime: '2026-05-20',
-  description: '修复TechPage溢出、SkillsPage乱码、三页区分化，页面布局问题全面修复'
+  version: 'v2.1.7',
+  updateTime: '2026-09-04',
+  description: '修复匹配与成果分析假状态，补充运行审计、真实备份键和演示数据标识'
 };
 
 // 全局版本配置Hook
@@ -23,7 +23,12 @@ export const useVersionConfig = () => {
   const [versionInfo, setVersionInfo] = useState<VersionInfo>(() => {
     try {
       const saved = localStorage.getItem('systemVersion');
-      return saved ? JSON.parse(saved) : INIT_VERSION;
+      if (!saved) return INIT_VERSION;
+
+      const parsed = JSON.parse(saved) as VersionInfo;
+      return parsed.version === INIT_VERSION.version
+        ? { ...INIT_VERSION, ...parsed }
+        : INIT_VERSION;
     } catch {
       return INIT_VERSION;
     }

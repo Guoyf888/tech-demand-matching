@@ -14,10 +14,11 @@ import { getBuiltInSkills } from '@/services/skills/builtInSkills';
 import { getOpenClawService } from '@/services/openclaw/OpenClawService';
 import { getHermesSkillsService } from '@/services/hermes/HermesSkillsService';
 import { skillStore } from '@/services/skills/skillStore';
+import { scientificSkillService } from '@/services/skills/scientificSkills';
 
 export interface UnifiedSkill {
   skill: Skill;
-  source: 'native' | 'openclaw' | 'custom' | 'hermes';
+  source: 'native' | 'openclaw' | 'custom' | 'hermes' | 'scientific';
   displayName: string;
   matchScore: number;
 }
@@ -113,6 +114,19 @@ class UnifiedSkillService {
       }
     }
 
+    // 5. Scientific Agent Skills（项目内只读技能库）
+    const scientificSkills = scientificSkillService.getAllSkills();
+    for (const skill of scientificSkills) {
+      if (skill.enabled && !unifiedSkills.find(u => u.skill.name === skill.name)) {
+        unifiedSkills.push({
+          skill,
+          source: 'scientific',
+          displayName: skill.name,
+          matchScore: 0,
+        });
+      }
+    }
+
     this.skillsCache = unifiedSkills;
     this.lastUpdate = now;
     return unifiedSkills;
@@ -121,7 +135,7 @@ class UnifiedSkillService {
   /**
    * 按来源筛选技能
    */
-  getSkillsBySource(source: 'native' | 'openclaw' | 'custom' | 'all'): UnifiedSkill[] {
+  getSkillsBySource(source: UnifiedSkill['source'] | 'all'): UnifiedSkill[] {
     const all = this.getAllSkills();
     if (source === 'all') return all;
     return all.filter(s => s.source === source);
@@ -217,13 +231,14 @@ class UnifiedSkillService {
   /**
    * 获取技能统计
    */
-  getStats(): { native: number; openclaw: number; hermes: number; custom: number; total: number } {
+  getStats(): { native: number; openclaw: number; hermes: number; custom: number; scientific: number; total: number } {
     const all = this.getAllSkills();
     return {
       native: all.filter(s => s.source === 'native').length,
       openclaw: all.filter(s => s.source === 'openclaw').length,
       hermes: all.filter(s => s.source === 'hermes').length,
       custom: all.filter(s => s.source === 'custom').length,
+      scientific: all.filter(s => s.source === 'scientific').length,
       total: all.length,
     };
   }
@@ -274,7 +289,8 @@ class UnifiedSkillService {
         }
 
         case 'native':
-        case 'custom': {
+        case 'custom':
+        case 'scientific': {
           // 内置/自定义技能通过LLM执行
           const systemPrompt = (skill.content
             ? skill.content
@@ -357,7 +373,7 @@ class UnifiedSkillService {
     const all = this.getAllSkills();
 
     const lines = [
-      `【统一技能库】共 ${stats.total} 个技能 (内置:${stats.native} | OpenClaw:${stats.openclaw} | 自定义:${stats.custom})`,
+      `【统一技能库】共 ${stats.total} 个技能 (内置:${stats.native} | 科研:${stats.scientific} | OpenClaw:${stats.openclaw} | 自定义:${stats.custom})`,
       '',
     ];
 

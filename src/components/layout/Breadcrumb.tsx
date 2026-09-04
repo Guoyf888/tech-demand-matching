@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
 
 interface BreadcrumbItem {
   label: string;
@@ -9,8 +9,7 @@ interface BreadcrumbItem {
 export function Breadcrumb() {
   const location = useLocation();
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   const getBreadcrumbs = (): BreadcrumbItem[] => {
     const paths = location.pathname.split('/').filter(Boolean);
@@ -25,9 +24,8 @@ export function Breadcrumb() {
         results: '我的成果',
         team: '团队展示',
         'demand-square': '需求广场',
-        'tech-square': '技术广场',
+        'tech-square': '成果广场',
         matching: '智能匹配',
-        cooperations: '合作管理',
         settings: '设置',
         skills: '技能市场',
       };

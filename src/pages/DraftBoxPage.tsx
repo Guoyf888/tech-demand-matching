@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
 
 export function DraftBoxPage() {
   const { drafts, deleteDraft } = useChatStore();
 
   const [selectedType, setSelectedType] = useState<'all' | 'demand' | 'tech' | 'platform'>('all');
 
-  const currentTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[currentTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   const filteredDrafts = selectedType === 'all'
     ? drafts

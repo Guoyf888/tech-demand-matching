@@ -1,76 +1,83 @@
 import { ApiConfigPanel } from '@/components/settings/ApiConfigPanel';
 import { ThemeSwitchPanel, ResetSettingsButton } from '@/components/settings/ThemeSwitchPanel';
+import { DataBackupPanel } from '@/components/settings/DataBackupPanel';
 import AboutSettings from '@/components/settings/AboutSettings';
-import { themes, useThemeStore } from '@/store/themeStore';
+import { useThemeColors } from '@/store/themeStore';
+import {
+  DatabaseBackup,
+  KeyRound,
+  Palette,
+  Settings2,
+  SlidersHorizontal,
+} from 'lucide-react';
+import type { ReactNode } from 'react';
+import './SettingsPage.css';
+
+interface SettingsSectionProps {
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+}
+
+function SettingsSection({ icon, title, children }: SettingsSectionProps) {
+  const themeColors = useThemeColors();
+
+  return (
+    <section
+      className="settings-section"
+      style={{
+        backgroundColor: themeColors.surface,
+        border: `1px solid ${themeColors.border}`,
+      }}
+    >
+      <h3 className="settings-section-title" style={{ color: themeColors.text }}>
+        <span
+          className="settings-section-icon"
+          style={{ color: themeColors.primary, backgroundColor: themeColors.primaryLight }}
+        >
+          {icon}
+        </span>
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
 
 export function SettingsPage() {
-  const effectiveTheme = useThemeStore.getState().getEffectiveTheme();
-  const themeColors = themes[effectiveTheme as keyof typeof themes]?.colors;
+  const themeColors = useThemeColors();
 
   return (
     <div
-      className="max-w-4xl mx-auto animate-scale-in overflow-y-auto"
+      className="settings-page max-w-4xl mx-auto animate-scale-in overflow-y-auto"
       style={{ maxHeight: 'calc(100vh - 120px)' }}
     >
-      <h2
-        className="text-xl font-bold mb-6"
-        style={{ color: themeColors?.text }}
-      >
-        设置
-      </h2>
-
-      {/* Theme Switch Card */}
-      <div
-        className="rounded-xl p-6 mb-4"
-        style={{
-          backgroundColor: themeColors?.surface,
-          border: `1px solid ${themeColors?.border}`,
-        }}
-      >
-        <h3
-          className="text-lg font-semibold mb-4 flex items-center gap-2"
-          style={{ color: themeColors?.text }}
+      <header className="settings-page-header">
+        <span
+          className="settings-page-icon"
+          style={{ color: themeColors.primary, backgroundColor: themeColors.primaryLight }}
         >
-          🎨 主题切换
-        </h3>
+          <Settings2 size={20} aria-hidden="true" />
+        </span>
+        <h2 style={{ color: themeColors.text }}>系统设置</h2>
+      </header>
+
+      <SettingsSection icon={<Palette size={18} aria-hidden="true" />} title="主题外观">
         <ThemeSwitchPanel />
-      </div>
+      </SettingsSection>
 
-      {/* API Config Card */}
-      <div
-        className="rounded-xl p-6 mb-4"
-        style={{
-          backgroundColor: themeColors?.surface,
-          border: `1px solid ${themeColors?.border}`,
-        }}
-      >
-        <h3
-          className="text-lg font-semibold mb-4 flex items-center gap-2"
-          style={{ color: themeColors?.text }}
-        >
-          🔑 大模型 API 配置
-        </h3>
+      <SettingsSection icon={<KeyRound size={18} aria-hidden="true" />} title="大模型 API 配置">
         <ApiConfigPanel />
-      </div>
+      </SettingsSection>
 
-      {/* Reset Settings Card */}
-      <div
-        className="rounded-xl p-6 mb-4"
-        style={{
-          backgroundColor: themeColors?.surface,
-          border: `1px solid ${themeColors?.border}`,
-        }}
-      >
-        <h3
-          className="text-lg font-semibold mb-4 flex items-center gap-2"
-          style={{ color: themeColors?.text }}
-        >
-          🔄 高级设置
-        </h3>
+      <SettingsSection icon={<SlidersHorizontal size={18} aria-hidden="true" />} title="高级设置">
         <ResetSettingsButton />
-      </div>
+      </SettingsSection>
 
-      {/* About Settings - 版本信息 */}
+      <SettingsSection icon={<DatabaseBackup size={18} aria-hidden="true" />} title="数据备份与恢复">
+        <DataBackupPanel />
+      </SettingsSection>
+
       <AboutSettings />
     </div>
   );
