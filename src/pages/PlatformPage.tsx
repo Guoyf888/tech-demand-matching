@@ -9,14 +9,14 @@ export function PlatformPage() {
   return (
     <div className="flex flex-col h-full gap-4" style={{ minHeight: 0 }}>
       <Breadcrumb />
-      {/* 匹配引擎标题 */}
+      {/* 专业匹配工作台标题 */}
       <div className="flex items-center gap-3 flex-shrink-0">
         <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm" style={{ backgroundColor: themeColors?.primary }}>
           <Target size={18} aria-hidden="true" />
         </div>
         <div>
-          <h2 className="text-base font-bold" style={{ color: themeColors?.text }}>智能供需匹配引擎</h2>
-          <p className="text-xs" style={{ color: themeColors?.textHint }}>基于AI的多维度技术供需匹配分析</p>
+          <h2 className="text-base font-bold" style={{ color: themeColors?.text }}>专业匹配工作台</h2>
+          <p className="text-xs" style={{ color: themeColors?.textHint }}>候选评估、证据解释、人工复核与批次留痕</p>
         </div>
       </div>
       <div

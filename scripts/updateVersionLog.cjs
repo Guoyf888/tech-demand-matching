@@ -32,7 +32,7 @@ function incrementVersion(version) {
   return `v${major}.${minor}.${patch}`;
 }
 
-function updateVersionLog(contents) {
+function updateVersionLog(contents, requestedVersion) {
   let logs = [];
 
   if (fs.existsSync(LOG_FILE)) {
@@ -45,7 +45,13 @@ function updateVersionLog(contents) {
   }
 
   const currentVersion = getCurrentVersion();
-  const newVersion = incrementVersion(currentVersion);
+  const newVersion = requestedVersion || incrementVersion(currentVersion);
+  if (!/^v\d+\.\d+\.\d+$/.test(newVersion)) {
+    throw new Error(`版本号格式无效: ${newVersion}`);
+  }
+  if (logs.some((entry) => entry.version === newVersion)) {
+    throw new Error(`版本号已存在: ${newVersion}`);
+  }
 
   const now = new Date();
   const updateTime = now.getFullYear() + '-' +
@@ -73,11 +79,14 @@ function updateVersionLog(contents) {
 
 // 主逻辑
 const args = process.argv.slice(2);
+const hasExplicitVersion = args[0] === '--version';
+const explicitVersion = hasExplicitVersion ? args[1] : undefined;
+const contents = hasExplicitVersion ? args.slice(2) : args;
 
-if (args.length === 0) {
-  console.log('用法: node scripts/updateVersionLog.cjs "更新描述1" "更新描述2" ...');
+if ((hasExplicitVersion && !explicitVersion) || contents.length === 0) {
+  console.log('用法: node scripts/updateVersionLog.cjs [--version v2.2.0] "更新描述1" "更新描述2" ...');
   console.log('示例: node scripts/updateVersionLog.cjs "修复了登录bug" "优化了界面样式"');
   process.exit(1);
 }
 
-updateVersionLog(args);
+updateVersionLog(contents, explicitVersion);

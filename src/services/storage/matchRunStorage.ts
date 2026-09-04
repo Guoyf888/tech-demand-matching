@@ -1,5 +1,27 @@
 export type MatchRunStatus = 'completed' | 'partial' | 'failed' | 'not_configured' | 'no_candidates';
 
+export interface MatchDimensionScores {
+  technicalFit?: number;
+  scenarioFit?: number;
+  maturityFit?: number;
+  deliveryFit?: number;
+}
+
+export interface MatchRunSnapshot {
+  demandId: string;
+  demandTitle: string;
+  demandTags: string[];
+  techId: string;
+  techTitle: string;
+  techTags: string[];
+  score: number;
+  reason: string;
+  dimensions?: MatchDimensionScores;
+  strengths?: string[];
+  risks?: string[];
+  nextStep?: string;
+}
+
 export interface MatchRunAudit {
   id: string;
   status: MatchRunStatus;
@@ -14,6 +36,9 @@ export interface MatchRunAudit {
   evaluatedCount: number;
   failedCount: number;
   matchCount: number;
+  selectedDemandId?: string;
+  selectedDemandTitle?: string;
+  results?: MatchRunSnapshot[];
   error?: string;
 }
 

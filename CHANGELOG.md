@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-09-05
+
+### Added
+
+- **专业匹配工作台** - 可选择单个已分析需求生成完整候选清单，集中完成研判与复核
+- **四维解释评分** - 展示技术能力、应用场景、成熟条件和交付可行性，并保留综合理由
+- **证据与风险卡片** - 分开展示匹配依据、待核实风险和建议下一步，材料不足时明确提示人工核验
+- **人工复核闭环** - 支持待复核、认可进入对接、驳回三种结论及复核备注，按需求与成果组合持久化
+- **历史批次回看** - 匹配运行记录保存需求、成果、评分和解释快照，可回看最近 50 个批次
+
+### Changed
+
+- **匹配范围控制** - 专业工作台按单个需求评估成果候选，并可查看低于默认阈值的有效结果
+- **匹配提示词** - 要求模型仅依据材料输出结构化分项评分、依据、风险和下一步，不得补造事实
+- **数据备份** - 人工复核记录纳入业务数据导出，继续排除 API 密钥
+- **版本日志工具** - 支持通过 `--version` 明确登记跨次版本，避免只能递增补丁号
+- **版本号同步** - package.json、package-lock.json、Cargo.toml、Cargo.lock、tauri.conf.json、versionConfig、关于页、README 与修改记录统一至 v2.2.0
+
 ## [2.1.7] - 2026-09-04
 
 ### Added

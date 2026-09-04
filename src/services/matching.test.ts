@@ -93,6 +93,47 @@ describe('matching run credibility', () => {
     expect(result.matches).toEqual([]);
     expect(result.failedCount).toBe(0);
   });
+
+  it('scopes a workbench run to one demand and persists explainable results', async () => {
+    gatewayMocks.isConfigured.mockResolvedValue(true);
+    gatewayMocks.chat.mockResolvedValue({
+      json: async () => ({
+        choices: [{ message: { content: JSON.stringify({
+          score: 42,
+          reason: '场景相关，但成熟度仍需验证',
+          dimensions: {
+            technicalFit: 80,
+            scenarioFit: 75,
+            maturityFit: 30,
+            deliveryFit: 45,
+          },
+          strengths: ['技术路线相关'],
+          risks: ['缺少现场验证数据'],
+          nextStep: '安排技术澄清会',
+        }) } }],
+      }),
+    });
+    const otherDemand = { ...demand, id: 'demand-2', title: '另一个需求' };
+
+    const result = await runMatching([demand, otherDemand], [tech], {
+      demandId: demand.id,
+      minScore: 0,
+    });
+
+    expect(gatewayMocks.chat).toHaveBeenCalledTimes(1);
+    expect(result.matches[0]).toMatchObject({
+      score: 42,
+      dimensions: { technicalFit: 80, maturityFit: 30 },
+      risks: ['缺少现场验证数据'],
+    });
+    expect(result.selectedDemandId).toBe(demand.id);
+    expect(matchRunStorage.getAll()[0].results?.[0]).toMatchObject({
+      demandId: demand.id,
+      techId: tech.id,
+      score: 42,
+      nextStep: '安排技术澄清会',
+    });
+  });
 });
 
 describe('parseMatchResponse', () => {
@@ -128,6 +169,36 @@ describe('parseMatchResponse', () => {
     );
     expect(result?.score).toBe(75);
     expect(result?.reason).toContain('nested');
+  });
+
+  it('parses explainable dimension scores and evidence fields', () => {
+    const result = parseMatchResponse(JSON.stringify({
+      score: 82.4,
+      reason: '能力与场景较匹配',
+      dimensions: {
+        technicalFit: 90.2,
+        scenarioFit: 86,
+        maturityFit: 70,
+        deliveryFit: 75,
+      },
+      strengths: ['已有同类案例'],
+      risks: ['交付周期待确认'],
+      nextStep: '核验案例并安排演示',
+    }));
+
+    expect(result).toEqual({
+      score: 82,
+      reason: '能力与场景较匹配',
+      dimensions: {
+        technicalFit: 90,
+        scenarioFit: 86,
+        maturityFit: 70,
+        deliveryFit: 75,
+      },
+      strengths: ['已有同类案例'],
+      risks: ['交付周期待确认'],
+      nextStep: '核验案例并安排演示',
+    });
   });
 
   it('repairs trailing commas', () => {

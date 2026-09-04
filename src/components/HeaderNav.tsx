@@ -18,7 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'ai', label: 'AI对话', icon: '💬', path: '/ai' },
   { id: 'demand', label: '需求管理', icon: '📋', path: '/demands' },
   { id: 'achievement', label: '技术成果', icon: '💡', path: '/results' },
-  { id: 'match', label: '智能匹配', icon: '🔗', path: '/matching' },
+  { id: 'match', label: '专业匹配', icon: '🔗', path: '/matching' },
   { id: 'skill', label: '技能市场', icon: '🔧', path: '/skills' },
   { id: 'terminal', label: '终端', icon: '💻', path: '/terminal' },
 ];

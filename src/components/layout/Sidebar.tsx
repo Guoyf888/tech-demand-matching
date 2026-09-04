@@ -19,7 +19,7 @@ const menuItems: Record<Role, { label: string; icon: string; path: string }[]> =
     { label: 'AI对话', icon: '💬', path: '/' },
     { label: '需求广场', icon: '🏢', path: '/demand-square' },
     { label: '技术广场', icon: '🎓', path: '/tech-square' },
-    { label: '智能匹配', icon: '🔗', path: '/matching' },
+    { label: '专业匹配', icon: '🔗', path: '/matching' },
     { label: '合作管理', icon: '🤝', path: '/cooperations' },
   ],
 };

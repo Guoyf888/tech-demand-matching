@@ -25,7 +25,7 @@ export function Breadcrumb() {
         team: '团队展示',
         'demand-square': '需求广场',
         'tech-square': '成果广场',
-        matching: '智能匹配',
+        matching: '专业匹配工作台',
         settings: '设置',
         skills: '技能市场',
       };

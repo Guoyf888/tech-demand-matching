@@ -56,7 +56,7 @@ const AboutSettings = () => {
         <div className="about-fact">
           <PackageCheck size={17} style={{ color: themeColors.primary }} aria-hidden="true" />
           <span style={{ color: themeColors.textHint }}>应用版本</span>
-          <strong style={{ color: themeColors.text }}>{latest?.version || 'v2.1.7'}</strong>
+          <strong style={{ color: themeColors.text }}>{latest?.version || 'v2.2.0'}</strong>
         </div>
         <div className="about-fact">
           <CalendarDays size={17} style={{ color: themeColors.primary }} aria-hidden="true" />

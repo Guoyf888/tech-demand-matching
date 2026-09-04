@@ -4,7 +4,9 @@ import { logger } from '@/utils/logger';
 import { jsonrepair } from 'jsonrepair';
 import {
   matchRunStorage,
+  type MatchDimensionScores,
   type MatchRunAudit,
+  type MatchRunSnapshot,
   type MatchRunStatus,
 } from './storage/matchRunStorage';
 
@@ -13,6 +15,10 @@ export interface MatchResult {
   tech: TechResult;
   score: number;
   reason: string;
+  dimensions?: MatchDimensionScores;
+  strengths?: string[];
+  risks?: string[];
+  nextStep?: string;
 }
 
 export interface MatchingRunResult extends MatchRunAudit {
@@ -20,9 +26,13 @@ export interface MatchingRunResult extends MatchRunAudit {
 }
 
 type PairEvaluation =
-  | { status: 'matched'; match: MatchResult }
-  | { status: 'not_matched' }
+  | { status: 'evaluated'; match: MatchResult }
   | { status: 'failed'; error: string };
+
+export interface MatchingOptions {
+  demandId?: string;
+  minScore?: number;
+}
 
 const CONCURRENCY_LIMIT = 5;
 const MIN_MATCH_SCORE = 50;
@@ -49,7 +59,20 @@ function extractJsonCandidate(content: string): string | null {
   return null;
 }
 
-export function parseMatchResponse(content: string): { score: number; reason: string } | null {
+function parseScore(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
+    return undefined;
+  }
+  return Math.round(value);
+}
+
+function parseStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  return items.length > 0 ? items.slice(0, 5) : undefined;
+}
+
+export function parseMatchResponse(content: string): Omit<MatchResult, 'demand' | 'tech'> | null {
   const candidate = extractJsonCandidate(content);
   if (!candidate) return null;
 
@@ -66,13 +89,29 @@ export function parseMatchResponse(content: string): { score: number; reason: st
   if (!parsed || typeof parsed !== 'object') return null;
 
   const obj = parsed as Record<string, unknown>;
-  const score = obj.score;
-  if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 100) {
-    return null;
-  }
+  const score = parseScore(obj.score);
+  if (score === undefined) return null;
   const reason = typeof obj.reason === 'string' ? obj.reason : '';
 
-  return { score: Math.round(score), reason };
+  const rawDimensions = obj.dimensions && typeof obj.dimensions === 'object'
+    ? obj.dimensions as Record<string, unknown>
+    : undefined;
+  const dimensions = rawDimensions ? {
+    technicalFit: parseScore(rawDimensions.technicalFit),
+    scenarioFit: parseScore(rawDimensions.scenarioFit),
+    maturityFit: parseScore(rawDimensions.maturityFit),
+    deliveryFit: parseScore(rawDimensions.deliveryFit),
+  } : undefined;
+  const hasDimensions = dimensions && Object.values(dimensions).some((value) => value !== undefined);
+
+  return {
+    score,
+    reason,
+    dimensions: hasDimensions ? dimensions : undefined,
+    strengths: parseStringArray(obj.strengths),
+    risks: parseStringArray(obj.risks),
+    nextStep: typeof obj.nextStep === 'string' && obj.nextStep.trim() ? obj.nextStep.trim() : undefined,
+  };
 }
 
 function sanitizeForPrompt(text: string): string {
@@ -109,8 +148,15 @@ ${sanitizeForPrompt(tech.content)}
 概要：${sanitizeForPrompt(tech.summary || '')}
 </成果>
 
-评估匹配度（0-100），并给出简要理由。
-必须以JSON格式返回：{"score": 数字, "reason": "字符串"}`,
+请只依据材料评估，不得补造事实。给出总匹配度和四项可解释评分（0-100）：
+- technicalFit：技术能力契合度
+- scenarioFit：应用场景契合度
+- maturityFit：成熟度与实施条件契合度
+- deliveryFit：团队与交付可行性
+
+同时列出明确优势、待核实风险和下一步建议。材料不足的内容必须写入 risks。
+必须以JSON格式返回：
+{"score": 数字, "reason": "字符串", "dimensions": {"technicalFit": 数字, "scenarioFit": 数字, "maturityFit": 数字, "deliveryFit": 数字}, "strengths": ["字符串"], "risks": ["字符串"], "nextStep": "字符串"}`,
         },
         { role: 'user', content: '请评估匹配度' },
       ],
@@ -121,18 +167,16 @@ ${sanitizeForPrompt(tech.content)}
     const data = await response.json();
     if (data.choices?.[0]?.message?.content) {
       const result = parseMatchResponse(data.choices[0].message.content);
-      if (result && result.score >= MIN_MATCH_SCORE) {
+      if (result) {
         return {
-          status: 'matched',
+          status: 'evaluated',
           match: {
             demand,
             tech,
-            score: result.score,
-            reason: result.reason,
+            ...result,
           },
         };
       }
-      if (result) return { status: 'not_matched' };
     }
     return { status: 'failed', error: 'AI 返回的匹配结果格式无效' };
   } catch (error) {
@@ -227,13 +271,27 @@ function createRunId(): string {
 }
 
 function finishRun(
-  base: Omit<MatchRunAudit, 'status' | 'completedAt' | 'durationMs' | 'evaluatedCount' | 'failedCount' | 'matchCount'>,
+  base: Omit<MatchRunAudit, 'status' | 'completedAt' | 'durationMs' | 'evaluatedCount' | 'failedCount' | 'matchCount' | 'results'>,
   status: MatchRunStatus,
   matches: MatchResult[],
   counts: { evaluatedCount?: number; failedCount?: number } = {},
   error?: string,
 ): MatchingRunResult {
   const completedAt = new Date().toISOString();
+  const snapshots: MatchRunSnapshot[] = matches.map((match) => ({
+    demandId: match.demand.id,
+    demandTitle: match.demand.title,
+    demandTags: match.demand.tags,
+    techId: match.tech.id,
+    techTitle: match.tech.title,
+    techTags: match.tech.tags,
+    score: match.score,
+    reason: match.reason,
+    dimensions: match.dimensions,
+    strengths: match.strengths,
+    risks: match.risks,
+    nextStep: match.nextStep,
+  }));
   const result: MatchingRunResult = {
     ...base,
     status,
@@ -242,6 +300,7 @@ function finishRun(
     evaluatedCount: counts.evaluatedCount ?? 0,
     failedCount: counts.failedCount ?? 0,
     matchCount: matches.length,
+    results: snapshots,
     error,
     matches,
   };
@@ -252,10 +311,12 @@ function finishRun(
 
 export async function runMatching(
   demands: Demand[],
-  techResults: TechResult[]
+  techResults: TechResult[],
+  options: MatchingOptions = {},
 ): Promise<MatchingRunResult> {
   const startedAt = new Date().toISOString();
-  const completedDemands = demands.filter((d) => d.status === 'completed');
+  const completedDemands = demands.filter((d) => d.status === 'completed'
+    && (!options.demandId || d.id === options.demandId));
   const completedTechs = techResults.filter((t) => t.status === 'completed');
   const metadata = apiGateway.getConfigMetadata();
   const base = {
@@ -266,6 +327,8 @@ export async function runMatching(
     demandCount: completedDemands.length,
     techCount: completedTechs.length,
     candidateCount: 0,
+    selectedDemandId: options.demandId,
+    selectedDemandTitle: completedDemands.length === 1 ? completedDemands[0].title : undefined,
   };
 
   if (completedDemands.length === 0 || completedTechs.length === 0) {
@@ -307,9 +370,13 @@ export async function runMatching(
   }
 
   const results = await runWithConcurrency(tasks, CONCURRENCY_LIMIT);
+  const minScore = typeof options.minScore === 'number'
+    ? Math.min(100, Math.max(0, options.minScore))
+    : MIN_MATCH_SCORE;
   const matches = results
-    .filter((result): result is Extract<PairEvaluation, { status: 'matched' }> => result.status === 'matched')
+    .filter((result): result is Extract<PairEvaluation, { status: 'evaluated' }> => result.status === 'evaluated')
     .map((result) => result.match)
+    .filter((match) => match.score >= minScore)
     .sort((a, b) => b.score - a.score);
   const failures = results.filter(
     (result): result is Extract<PairEvaluation, { status: 'failed' }> => result.status === 'failed',

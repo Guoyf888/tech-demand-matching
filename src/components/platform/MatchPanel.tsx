@@ -1,468 +1,324 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { demandStorage } from '@/services/storage/demandStorage';
 import { techStorage } from '@/services/storage/techStorage';
-import { runMatching, type MatchingRunResult } from '@/services/matching';
-import { Demand, TechResult } from '@/types';
+import { runMatching, type MatchResult } from '@/services/matching';
+import {
+  matchRunStorage,
+  type MatchDimensionScores,
+  type MatchRunAudit,
+  type MatchRunSnapshot,
+} from '@/services/storage/matchRunStorage';
+import {
+  matchReviewStorage,
+  type MatchReview,
+  type MatchReviewDecision,
+} from '@/services/storage/matchReviewStorage';
+import type { Demand, TechResult } from '@/types';
 import { useThemeColors } from '@/store/themeStore';
-import { FileText, Lightbulb, Handshake, Filter, ChevronDown } from 'lucide-react';
+import {
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Filter,
+  Handshake,
+  History,
+  Lightbulb,
+  PlayCircle,
+  ShieldAlert,
+  XCircle,
+} from 'lucide-react';
 
-interface MatchResult {
-  demand: Demand;
-  tech: TechResult;
+interface WorkbenchMatch {
+  demandId: string;
+  demandTitle: string;
+  demandTags: string[];
+  techId: string;
+  techTitle: string;
+  techTags: string[];
   score: number;
   reason: string;
+  dimensions?: MatchDimensionScores;
+  strengths?: string[];
+  risks?: string[];
+  nextStep?: string;
+}
+
+const DIMENSION_LABELS: Array<[keyof MatchDimensionScores, string]> = [
+  ['technicalFit', '技术能力'],
+  ['scenarioFit', '应用场景'],
+  ['maturityFit', '成熟条件'],
+  ['deliveryFit', '交付可行'],
+];
+
+const DECISION_LABELS: Record<MatchReviewDecision, string> = {
+  pending: '待复核',
+  approved: '已认可',
+  rejected: '已驳回',
+};
+
+function pairKey(demandId: string, techId: string): string {
+  return `${demandId}::${techId}`;
+}
+
+function fromMatch(match: MatchResult): WorkbenchMatch {
+  return {
+    demandId: match.demand.id,
+    demandTitle: match.demand.title,
+    demandTags: match.demand.tags,
+    techId: match.tech.id,
+    techTitle: match.tech.title,
+    techTags: match.tech.tags,
+    score: match.score,
+    reason: match.reason,
+    dimensions: match.dimensions,
+    strengths: match.strengths,
+    risks: match.risks,
+    nextStep: match.nextStep,
+  };
+}
+
+function fromSnapshot(snapshot: MatchRunSnapshot): WorkbenchMatch {
+  return { ...snapshot };
 }
 
 function getScoreLevel(score: number): { label: string; color: string } {
-  if (score >= 85) return { label: '优秀', color: '#22c55e' };
-  if (score >= 70) return { label: '良好', color: '#3b82f6' };
-  return { label: '一般', color: '#f59e0b' };
+  if (score >= 85) return { label: '优先对接', color: '#16a34a' };
+  if (score >= 70) return { label: '建议复核', color: '#2563eb' };
+  if (score >= 50) return { label: '补充核验', color: '#d97706' };
+  return { label: '低匹配', color: '#64748b' };
 }
 
-function getSuggestedCooperation(demand: Demand, tech: TechResult): string {
-  const text = `${demand.content} ${tech.content} ${tech.summary || ''}`;
-  if (/合作研发|联合开发|共同研发/.test(text)) return '合作研发';
-  if (/技术许可|许可授权|授权/.test(text)) return '技术许可';
-  if (/技术咨询|顾问|咨询/.test(text)) return '技术咨询';
-  return '技术转让';
-}
-
-function extractCommonKeywords(demand: Demand, tech: TechResult): string[] {
-  const demandWords = new Set(
-    [...demand.tags, ...(demand.content || '').split(/[\s,，、;；.。]+/).filter(w => w.length > 1)]
-      .map(w => w.toLowerCase())
-  );
-  const techWords = new Set(
-    [...tech.tags, ...(tech.content || '').split(/[\s,，、;；.。]+/).filter(w => w.length > 1)]
-      .map(w => w.toLowerCase())
-  );
-  const common: string[] = [];
-  for (const w of demandWords) {
-    if (techWords.has(w) && !common.includes(w)) common.push(w);
-  }
-  return common.slice(0, 5);
+function formatRunTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function MatchPanel() {
-  const [matches, setMatches] = useState<MatchResult[]>([]);
+  const [demands, setDemands] = useState<Demand[]>([]);
+  const [techResults, setTechResults] = useState<TechResult[]>([]);
+  const [selectedDemandId, setSelectedDemandId] = useState('');
+  const [results, setResults] = useState<WorkbenchMatch[]>([]);
+  const [activeRun, setActiveRun] = useState<MatchRunAudit | null>(null);
+  const [runs, setRuns] = useState<MatchRunAudit[]>([]);
+  const [reviews, setReviews] = useState<Record<string, MatchReview>>({});
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [isMatching, setIsMatching] = useState(false);
-  const [hasRun, setHasRun] = useState(false);
-  const [lastRun, setLastRun] = useState<MatchingRunResult | null>(null);
   const [unexpectedError, setUnexpectedError] = useState<string | null>(null);
-  const [demandCount, setDemandCount] = useState(0);
-  const [techCount, setTechCount] = useState(0);
-  const [filterMinScore, setFilterMinScore] = useState(0);
-  const [showFilter, setShowFilter] = useState(false);
-
+  const [filterMinScore, setFilterMinScore] = useState(50);
+  const [decisionFilter, setDecisionFilter] = useState<'all' | MatchReviewDecision>('all');
   const themeColors = useThemeColors();
 
-  // 加载统计
   useEffect(() => {
-    const demands = demandStorage.getAll().filter(d => d.status === 'completed');
-    const techs = techStorage.getAll().filter(t => t.status === 'completed');
-    setDemandCount(demands.length);
-    setTechCount(techs.length);
+    const completedDemands = demandStorage.getAll().filter((item) => item.status === 'completed');
+    const completedTechs = techStorage.getAll().filter((item) => item.status === 'completed');
+    const storedReviews = matchReviewStorage.getAll();
+    setDemands(completedDemands);
+    setTechResults(completedTechs);
+    setSelectedDemandId((current) => current || completedDemands[0]?.id || '');
+    setRuns(matchRunStorage.getAll());
+    setReviews(Object.fromEntries(storedReviews.map((review) => [review.id, review])));
   }, []);
 
+  const visibleResults = useMemo(() => results.filter((result) => {
+    if (result.score < filterMinScore) return false;
+    const decision = reviews[pairKey(result.demandId, result.techId)]?.decision || 'pending';
+    return decisionFilter === 'all' || decision === decisionFilter;
+  }), [decisionFilter, filterMinScore, results, reviews]);
+
+  const reviewStats = useMemo(() => results.reduce((stats, result) => {
+    const decision = reviews[pairKey(result.demandId, result.techId)]?.decision || 'pending';
+    stats[decision] += 1;
+    return stats;
+  }, { pending: 0, approved: 0, rejected: 0 }), [results, reviews]);
+
+  const averageScore = results.length > 0
+    ? Math.round(results.reduce((sum, result) => sum + result.score, 0) / results.length)
+    : 0;
+
   const handleMatch = async () => {
+    if (!selectedDemandId) return;
     setIsMatching(true);
     setUnexpectedError(null);
 
     try {
-      const demands = demandStorage.getAll();
-      const techResults = techStorage.getAll();
-      const run = await runMatching(demands, techResults);
-      setMatches(run.matches);
-      setLastRun(run);
-      setHasRun(true);
-      setDemandCount(demands.filter(d => d.status === 'completed').length);
-      setTechCount(techResults.filter(t => t.status === 'completed').length);
+      const run = await runMatching(demands, techResults, {
+        demandId: selectedDemandId,
+        minScore: 0,
+      });
+      setResults(run.matches.map(fromMatch));
+      setActiveRun(run);
+      setRuns(matchRunStorage.getAll());
     } catch (error) {
-      const msg = error instanceof Error ? error.message : '匹配过程出现未知错误';
-      console.error('匹配失败:', msg);
-      setMatches([]);
-      setLastRun(null);
-      setUnexpectedError(msg);
-      setHasRun(true);
+      const message = error instanceof Error ? error.message : '匹配过程出现未知错误';
+      setResults([]);
+      setActiveRun(null);
+      setUnexpectedError(message);
     } finally {
       setIsMatching(false);
     }
   };
 
-  const filteredMatches = matches.filter(m => m.score >= filterMinScore);
+  const openRun = (run: MatchRunAudit) => {
+    setActiveRun(run);
+    setResults((run.results || []).map(fromSnapshot));
+    setUnexpectedError(null);
+    if (run.selectedDemandId) setSelectedDemandId(run.selectedDemandId);
+  };
+
+  const saveReview = (result: WorkbenchMatch, decision: MatchReviewDecision) => {
+    if (!activeRun) return;
+    const key = pairKey(result.demandId, result.techId);
+    const saved = matchReviewStorage.save({
+      demandId: result.demandId,
+      techId: result.techId,
+      runId: activeRun.id,
+      decision,
+      note: noteDrafts[key] ?? reviews[key]?.note ?? '',
+    });
+    setReviews((current) => ({ ...current, [key]: saved }));
+  };
+
+  const runStatusLabel = activeRun?.status === 'failed' ? '匹配执行失败'
+    : activeRun?.status === 'not_configured' ? '匹配服务未配置'
+      : activeRun?.status === 'partial' ? '匹配部分完成'
+        : activeRun?.status === 'no_candidates' ? '没有可评估的候选组合'
+          : activeRun ? `匹配完成，共评估 ${activeRun.evaluatedCount} 个候选` : '';
+  const runHasError = activeRun?.status === 'failed' || activeRun?.status === 'not_configured';
 
   return (
-    <div className="space-y-6">
-      {/* 顶部统计 */}
-      <div className="grid grid-cols-3 gap-4">
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {[
-          { label: '技术需求', count: demandCount, icon: <FileText size={20} />, color: themeColors?.primary },
-          { label: '科技成果', count: techCount, icon: <Lightbulb size={20} />, color: themeColors?.success },
-          { label: '匹配结果', count: matches.length, icon: <Handshake size={20} />, color: themeColors?.warning },
-        ].map(stat => (
-          <div
-            key={stat.label}
-            className="rounded-xl p-4 flex items-center gap-3"
-            style={{
-              backgroundColor: themeColors?.surface,
-              border: `1px solid ${themeColors?.border}`,
-            }}
-          >
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: stat.color + '15', color: stat.color }}
-            >
-              {stat.icon}
+          { label: '可用需求', value: demands.length, icon: FileText, color: themeColors.primary },
+          { label: '可用成果', value: techResults.length, icon: Lightbulb, color: themeColors.success },
+          { label: '本批候选', value: results.length, icon: Handshake, color: themeColors.info },
+          { label: '已认可', value: reviewStats.approved, icon: CheckCircle2, color: themeColors.success },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="rounded-xl p-4 flex items-center gap-3" style={{ backgroundColor: themeColors.surface, border: `1px solid ${themeColors.border}` }}>
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}18`, color }}>
+              <Icon size={20} aria-hidden="true" />
             </div>
             <div>
-              <span className="text-2xl font-bold block" style={{ color: themeColors?.text }}>{stat.count}</span>
-              <span className="text-xs" style={{ color: themeColors?.textHint }}>{stat.label}</span>
+              <span className="text-2xl font-bold block" style={{ color: themeColors.text }}>{value}</span>
+              <span className="text-xs" style={{ color: themeColors.textHint }}>{label}</span>
             </div>
           </div>
         ))}
       </div>
 
-      {/* 操作栏 */}
-      <div className="flex items-center justify-between">
-        <h2
-          className="text-xl font-bold"
-          style={{ color: themeColors?.text }}
-        >
-          供需智能匹配
-        </h2>
-        <div className="flex items-center gap-2">
-          {hasRun && (
-            <button
-              onClick={() => setShowFilter(!showFilter)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition-all"
-              style={{
-                backgroundColor: showFilter ? themeColors?.primaryLight : themeColors?.surface,
-                borderColor: showFilter ? themeColors?.primary : themeColors?.border,
-                color: showFilter ? themeColors?.primary : themeColors?.textSecondary,
-              }}
-            >
-              <Filter size={14} />
-              <span>筛选</span>
-              <ChevronDown size={14} className={`transition-transform ${showFilter ? 'rotate-180' : ''}`} />
+      <section className="rounded-xl p-4" style={{ backgroundColor: themeColors.surface, border: `1px solid ${themeColors.border}` }}>
+        <div className="flex flex-col xl:flex-row xl:items-end gap-4">
+          <label className="flex-1 min-w-0">
+            <span className="text-xs font-medium block mb-2" style={{ color: themeColors.textSecondary }}>当前技术需求</span>
+            <select value={selectedDemandId} onChange={(event) => { setSelectedDemandId(event.target.value); setResults([]); setActiveRun(null); }} className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ backgroundColor: themeColors.background, border: `1px solid ${themeColors.border}`, color: themeColors.text }}>
+              {demands.length === 0 && <option value="">暂无已完成分析的需求</option>}
+              {demands.map((demand) => <option key={demand.id} value={demand.id}>{demand.title}</option>)}
+            </select>
+          </label>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <label>
+              <span className="text-xs font-medium block mb-2" style={{ color: themeColors.textSecondary }}>最低展示分</span>
+              <select value={filterMinScore} onChange={(event) => setFilterMinScore(Number(event.target.value))} className="rounded-lg px-3 py-2.5 text-sm outline-none" style={{ backgroundColor: themeColors.background, border: `1px solid ${themeColors.border}`, color: themeColors.text }}>
+                {[0, 50, 60, 70, 80].map((score) => <option key={score} value={score}>{score === 0 ? '全部' : `${score} 分以上`}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="text-xs font-medium block mb-2" style={{ color: themeColors.textSecondary }}>复核状态</span>
+              <select value={decisionFilter} onChange={(event) => setDecisionFilter(event.target.value as 'all' | MatchReviewDecision)} className="rounded-lg px-3 py-2.5 text-sm outline-none" style={{ backgroundColor: themeColors.background, border: `1px solid ${themeColors.border}`, color: themeColors.text }}>
+                <option value="all">全部状态</option>
+                <option value="pending">待复核</option>
+                <option value="approved">已认可</option>
+                <option value="rejected">已驳回</option>
+              </select>
+            </label>
+            <button onClick={handleMatch} disabled={isMatching || !selectedDemandId || techResults.length === 0} className="btn-primary px-5 py-2.5 flex items-center gap-2 disabled:opacity-50">
+              <PlayCircle size={16} aria-hidden="true" />
+              {isMatching ? '正在评估候选…' : '生成专业匹配'}
             </button>
-          )}
-          <button
-            onClick={handleMatch}
-            disabled={isMatching}
-            className="btn-primary px-6"
-          >
-            {isMatching ? '匹配中...' : '开始匹配'}
-          </button>
-        </div>
-      </div>
-
-      {/* 运行状态：不展示虚构百分比 */}
-      {isMatching && (
-        <div
-          className="animate-pulse rounded-lg px-4 py-3 text-sm"
-          style={{ color: themeColors?.primary, backgroundColor: themeColors?.primaryLight }}
-        >
-          正在评估候选组合，完成前不显示估算百分比…
-        </div>
-      )}
-
-      {lastRun && (
-        <div
-          className="rounded-lg px-4 py-3 text-sm"
-          style={{
-            color: lastRun.status === 'failed' || lastRun.status === 'not_configured'
-              ? themeColors?.error
-              : lastRun.status === 'partial'
-                ? themeColors?.warning
-                : themeColors?.textSecondary,
-            backgroundColor: lastRun.status === 'failed' || lastRun.status === 'not_configured'
-              ? themeColors?.error + '12'
-              : lastRun.status === 'partial'
-                ? themeColors?.warning + '12'
-                : themeColors?.surface,
-            border: `1px solid ${lastRun.status === 'failed' || lastRun.status === 'not_configured'
-              ? themeColors?.error
-              : lastRun.status === 'partial'
-                ? themeColors?.warning
-                : themeColors?.border}`,
-          }}
-        >
-          <div className="font-medium">
-            {lastRun.status === 'failed' ? '匹配执行失败'
-              : lastRun.status === 'not_configured' ? '匹配服务未配置'
-              : lastRun.status === 'partial' ? '匹配部分完成'
-              : lastRun.status === 'no_candidates' ? '没有可评估的候选组合'
-              : `匹配完成，共得到 ${lastRun.matchCount} 项结果`}
-          </div>
-          {lastRun.error && <div className="mt-1">{lastRun.error}</div>}
-          <div className="mt-1 text-xs opacity-80">
-            候选 {lastRun.candidateCount} · 有效评估 {lastRun.evaluatedCount} · 失败 {lastRun.failedCount}
-            {lastRun.provider && ` · ${lastRun.provider}/${lastRun.modelId || '默认模型'}`}
-            {` · ${lastRun.durationMs}ms`}
           </div>
         </div>
-      )}
+      </section>
 
-      {unexpectedError && (
-        <div
-          className="rounded-lg px-4 py-3 text-sm"
-          style={{
-            color: themeColors?.error,
-            backgroundColor: themeColors?.error + '12',
-            border: `1px solid ${themeColors?.error}`,
-          }}
-        >
-          <div className="font-medium">匹配执行异常</div>
-          <div className="mt-1">{unexpectedError}</div>
+      {isMatching && <div className="animate-pulse rounded-lg px-4 py-3 text-sm" style={{ color: themeColors.primary, backgroundColor: themeColors.primaryLight }}>正在逐项评估技术能力、应用场景、成熟条件与交付可行性；完成前不显示估算百分比。</div>}
+
+      {(activeRun || unexpectedError) && (
+        <div className="rounded-lg px-4 py-3 text-sm" style={{ color: runHasError || unexpectedError ? themeColors.error : activeRun?.status === 'partial' ? themeColors.warning : themeColors.textSecondary, backgroundColor: runHasError || unexpectedError ? themeColors.errorLight : activeRun?.status === 'partial' ? themeColors.warningLight : themeColors.background, border: `1px solid ${runHasError || unexpectedError ? themeColors.error : activeRun?.status === 'partial' ? themeColors.warning : themeColors.border}` }}>
+          <div className="font-medium">{unexpectedError ? '匹配执行异常' : runStatusLabel}</div>
+          {(unexpectedError || activeRun?.error) && <div className="mt-1">{unexpectedError || activeRun?.error}</div>}
+          {activeRun && <div className="mt-1 text-xs opacity-80">候选 {activeRun.candidateCount} · 有效评估 {activeRun.evaluatedCount} · 失败 {activeRun.failedCount}{activeRun.provider && ` · ${activeRun.provider}/${activeRun.modelId || '默认模型'}`}{` · ${activeRun.durationMs}ms`}</div>}
         </div>
       )}
 
-      {/* 筛选区 */}
-      {showFilter && (
-        <div
-          className="rounded-xl p-4 animate-fade-in"
-          style={{
-            backgroundColor: themeColors?.surface,
-            border: `1px solid ${themeColors?.border}`,
-          }}
-        >
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-medium" style={{ color: themeColors?.text }}>最低匹配度：</span>
-            <div className="flex gap-2">
-              {[0, 50, 60, 70, 80].map(val => (
-                <button
-                  key={val}
-                  onClick={() => setFilterMinScore(val)}
-                  className="px-3 py-1 rounded-md text-xs font-medium transition-all"
-                  style={{
-                    backgroundColor: filterMinScore === val ? themeColors?.primary + '20' : themeColors?.surfaceHover,
-                    color: filterMinScore === val ? themeColors?.primary : themeColors?.textSecondary,
-                    border: `1px solid ${filterMinScore === val ? themeColors?.primary + '40' : 'transparent'}`,
-                  }}
-                >
-                  {val === 0 ? '全部' : `${val}%+`}
-                </button>
-              ))}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_280px] gap-5 items-start">
+        <div className="space-y-4 min-w-0">
+          {activeRun && results.length > 0 && <div className="flex flex-wrap items-center gap-3 text-xs" style={{ color: themeColors.textSecondary }}><span className="inline-flex items-center gap-1"><Filter size={13} />展示 {visibleResults.length}/{results.length}</span><span>平均匹配度 {averageScore}</span><span>待复核 {reviewStats.pending}</span><span>已认可 {reviewStats.approved}</span><span>已驳回 {reviewStats.rejected}</span></div>}
+
+          {!activeRun ? (
+            <div className="text-center p-12 rounded-xl" style={{ backgroundColor: themeColors.surface, border: `1px solid ${themeColors.border}` }}>
+              <Handshake size={42} className="mx-auto mb-4" style={{ color: themeColors.primary }} aria-hidden="true" />
+              <p className="font-medium" style={{ color: themeColors.text }}>选择一个需求，生成可复核的专业匹配清单</p>
+              <p className="text-sm mt-2" style={{ color: themeColors.textHint }}>系统结论是辅助研判，不替代技术尽调、知识产权核验和商务决策。</p>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 匹配结果 */}
-      {!hasRun ? (
-        <div
-          className="text-center p-12 rounded-xl"
-          style={{
-            backgroundColor: themeColors?.surface,
-            border: `1px solid ${themeColors?.border}`,
-          }}
-        >
-          <span className="text-5xl block mb-4">🔗</span>
-          <p
-            className="text-base font-medium"
-            style={{ color: themeColors?.text }}
-          >
-            点击"开始匹配"进行需求方与技术方的智能匹配
-          </p>
-          <p
-            className="text-sm mt-2"
-            style={{ color: themeColors?.textHint }}
-          >
-            系统将基于AI分析，从行业、技术领域、关键词等多维度进行匹配评估
-          </p>
-        </div>
-      ) : filteredMatches.length === 0 ? (
-        <div
-          className="text-center p-12 rounded-xl"
-          style={{
-            backgroundColor: themeColors?.surface,
-            border: `1px solid ${themeColors?.border}`,
-          }}
-        >
-          <span className="text-5xl block mb-4">📭</span>
-          <p
-            className="text-base font-medium"
-            style={{ color: themeColors?.text }}
-          >
-            {unexpectedError || lastRun?.status === 'failed' || lastRun?.status === 'not_configured'
-              ? '本次匹配未成功完成'
-              : lastRun?.status === 'no_candidates'
-                ? '没有可评估的候选组合'
-              : matches.length === 0 ? '没有达到阈值的匹配结果' : '没有符合筛选条件的匹配'}
-          </p>
-          <p
-            className="text-sm mt-2"
-            style={{ color: themeColors?.textHint }}
-          >
-            {unexpectedError || lastRun?.status === 'failed' || lastRun?.status === 'not_configured'
-              ? '请根据上方错误信息修复后重试'
-              : lastRun?.status === 'no_candidates'
-                ? (lastRun.error || '请先准备已完成分析的需求和技术成果')
-              : matches.length === 0
-              ? '候选组合已完成评估，但均低于当前匹配阈值'
-              : '请尝试降低筛选条件'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredMatches.map((match, index) => {
-            const level = getScoreLevel(match.score);
-            const commonKeywords = extractCommonKeywords(match.demand, match.tech);
-            const cooperation = getSuggestedCooperation(match.demand, match.tech);
-
+          ) : visibleResults.length === 0 ? (
+            <div className="text-center p-10 rounded-xl" style={{ backgroundColor: themeColors.surface, border: `1px solid ${themeColors.border}` }}>
+              <ShieldAlert size={38} className="mx-auto mb-3" style={{ color: themeColors.textHint }} aria-hidden="true" />
+              <p className="font-medium" style={{ color: themeColors.text }}>{results.length === 0 ? '本批次没有可展示的匹配结果' : '没有符合当前筛选条件的结果'}</p>
+              <p className="text-sm mt-2" style={{ color: themeColors.textHint }}>{activeRun.error || '可调整最低分或复核状态筛选条件。'}</p>
+            </div>
+          ) : visibleResults.map((result) => {
+            const key = pairKey(result.demandId, result.techId);
+            const review = reviews[key];
+            const decision = review?.decision || 'pending';
+            const level = getScoreLevel(result.score);
             return (
-              <div
-                key={index}
-                className="rounded-xl p-6 transition-all hover:shadow-md"
-                style={{
-                  backgroundColor: themeColors?.surface,
-                  border: `1px solid ${themeColors?.border}`,
-                }}
-              >
-                {/* 匹配头部 */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="text-3xl font-bold"
-                      style={{ color: themeColors?.primary }}
-                    >
-                      {match.score}%
-                    </span>
+              <article key={key} className="rounded-xl p-5" style={{ backgroundColor: themeColors.surface, border: `1px solid ${decision === 'approved' ? themeColors.success : decision === 'rejected' ? themeColors.error : themeColors.border}` }}>
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                  <div><div className="flex items-center gap-2 mb-1"><span className="text-3xl font-bold" style={{ color: level.color }}>{result.score}</span><span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: `${level.color}18`, color: level.color }}>{level.label}</span><span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: themeColors.background, color: themeColors.textSecondary }}>{DECISION_LABELS[decision]}</span></div><p className="text-xs" style={{ color: themeColors.textHint }}>综合匹配度 / 100</p></div>
+                  <div className="text-right min-w-0"><p className="font-semibold truncate" style={{ color: themeColors.text }}>{result.techTitle}</p><p className="text-xs mt-1 truncate" style={{ color: themeColors.textHint }}>对应需求：{result.demandTitle}</p></div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     <div>
-                      <span className="text-sm" style={{ color: themeColors?.textSecondary }}>匹配度</span>
-                      <span
-                        className="ml-2 px-2 py-0.5 rounded text-xs font-medium"
-                        style={{
-                          backgroundColor: level.color + '18',
-                          color: level.color,
-                        }}
-                      >
-                        {level.label}
-                      </span>
+                      <h4 className="text-xs font-semibold mb-2" style={{ color: themeColors.textSecondary }}>可解释评分</h4>
+                      {result.dimensions && Object.values(result.dimensions).some((value) => value !== undefined) ? <div className="space-y-2">{DIMENSION_LABELS.map(([field, label]) => { const value = result.dimensions?.[field]; return <div key={field} className="grid grid-cols-[64px_1fr_32px] gap-2 items-center text-xs"><span style={{ color: themeColors.textHint }}>{label}</span><div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: themeColors.background }}><div className="h-full rounded-full" style={{ width: `${value || 0}%`, backgroundColor: themeColors.primary }} /></div><span className="text-right" style={{ color: themeColors.textSecondary }}>{value ?? '—'}</span></div>; })}</div> : <p className="text-xs" style={{ color: themeColors.textHint }}>本次模型未返回分项评分，请人工补充核验。</p>}
                     </div>
+                    <div><h4 className="text-xs font-semibold mb-1" style={{ color: themeColors.textSecondary }}>综合判断</h4><p className="text-sm leading-relaxed" style={{ color: themeColors.textSecondary }}>{result.reason || '模型未提供判断理由。'}</p></div>
+                    {result.nextStep && <div className="rounded-lg p-3" style={{ backgroundColor: themeColors.primaryLight }}><h4 className="text-xs font-semibold mb-1" style={{ color: themeColors.primary }}>建议下一步</h4><p className="text-sm" style={{ color: themeColors.textSecondary }}>{result.nextStep}</p></div>}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="px-2.5 py-1 rounded-lg text-xs font-medium"
-                      style={{
-                        backgroundColor: themeColors?.primary + '10',
-                        color: themeColors?.primary,
-                      }}
-                    >
-                      建议：{cooperation}
-                    </span>
+
+                  <div className="space-y-3">
+                    <div className="rounded-lg p-3" style={{ backgroundColor: themeColors.successLight }}><h4 className="text-xs font-semibold mb-2" style={{ color: themeColors.success }}>匹配依据</h4>{result.strengths?.length ? <ul className="space-y-1 text-sm" style={{ color: themeColors.textSecondary }}>{result.strengths.map((item) => <li key={item}>• {item}</li>)}</ul> : <p className="text-xs" style={{ color: themeColors.textHint }}>未提供明确依据，需人工核验。</p>}</div>
+                    <div className="rounded-lg p-3" style={{ backgroundColor: themeColors.warningLight }}><h4 className="text-xs font-semibold mb-2" style={{ color: themeColors.warning }}>风险与缺口</h4>{result.risks?.length ? <ul className="space-y-1 text-sm" style={{ color: themeColors.textSecondary }}>{result.risks.map((item) => <li key={item}>• {item}</li>)}</ul> : <p className="text-xs" style={{ color: themeColors.textHint }}>模型未列出风险，不代表不存在风险。</p>}</div>
                   </div>
                 </div>
 
-                {/* 双栏对比 */}
-                <div className="grid grid-cols-2 gap-6 mb-4">
-                  <div
-                    className="p-4 rounded-lg"
-                    style={{ backgroundColor: themeColors?.surfaceHover }}
-                  >
-                    <h4
-                      className="font-semibold text-sm mb-2 flex items-center gap-1.5"
-                      style={{ color: themeColors?.textSecondary }}
-                    >
-                      <FileText size={14} />
-                      <span>需求方</span>
-                    </h4>
-                    <p
-                      className="font-medium mb-2"
-                      style={{ color: themeColors?.text }}
-                    >
-                      {match.demand.title}
-                    </p>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {match.demand.tags.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-2 py-0.5 rounded text-xs font-medium"
-                          style={{
-                            backgroundColor: themeColors?.primary + '20',
-                            color: themeColors?.primary,
-                          }}
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div
-                    className="p-4 rounded-lg"
-                    style={{ backgroundColor: themeColors?.surfaceHover }}
-                  >
-                    <h4
-                      className="font-semibold text-sm mb-2 flex items-center gap-1.5"
-                      style={{ color: themeColors?.textSecondary }}
-                    >
-                      <Lightbulb size={14} />
-                      <span>技术方</span>
-                    </h4>
-                    <p
-                      className="font-medium mb-2"
-                      style={{ color: themeColors?.text }}
-                    >
-                      {match.tech.title}
-                    </p>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {match.tech.tags.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-2 py-0.5 rounded text-xs font-medium"
-                          style={{
-                            backgroundColor: themeColors?.success + '20',
-                            color: themeColors?.success,
-                          }}
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+                <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${themeColors.border}` }}>
+                  <label className="text-xs font-medium block mb-2" style={{ color: themeColors.textSecondary }}>复核备注</label>
+                  <textarea rows={2} value={noteDrafts[key] ?? review?.note ?? ''} onChange={(event) => setNoteDrafts((current) => ({ ...current, [key]: event.target.value }))} placeholder="记录待核验材料、沟通结论或驳回原因" className="w-full rounded-lg px-3 py-2 text-sm resize-y outline-none" style={{ backgroundColor: themeColors.background, border: `1px solid ${themeColors.border}`, color: themeColors.text }} />
+                  <div className="flex flex-wrap justify-end gap-2 mt-3">
+                    <button onClick={() => saveReview(result, 'pending')} className="px-3 py-2 rounded-lg text-xs inline-flex items-center gap-1.5" style={{ backgroundColor: themeColors.background, color: themeColors.textSecondary, border: `1px solid ${themeColors.border}` }}><Clock3 size={14} />待复核</button>
+                    <button onClick={() => saveReview(result, 'rejected')} className="px-3 py-2 rounded-lg text-xs inline-flex items-center gap-1.5" style={{ backgroundColor: themeColors.errorLight, color: themeColors.error, border: `1px solid ${themeColors.error}40` }}><XCircle size={14} />驳回</button>
+                    <button onClick={() => saveReview(result, 'approved')} className="px-3 py-2 rounded-lg text-xs inline-flex items-center gap-1.5" style={{ backgroundColor: themeColors.successLight, color: themeColors.success, border: `1px solid ${themeColors.success}40` }}><CheckCircle2 size={14} />认可进入对接</button>
                   </div>
                 </div>
-
-                {/* 共同关键词 */}
-                {commonKeywords.length > 0 && (
-                  <div className="mb-3">
-                    <span className="text-xs font-medium mr-2" style={{ color: themeColors?.textHint }}>匹配关键词：</span>
-                    <div className="inline-flex gap-1.5 flex-wrap mt-1">
-                      {commonKeywords.map(kw => (
-                        <span
-                          key={kw}
-                          className="px-2 py-0.5 rounded text-xs"
-                          style={{
-                            backgroundColor: themeColors?.warning + '15',
-                            color: themeColors?.warning,
-                          }}
-                        >
-                          {kw}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 匹配理由 */}
-                <div
-                  className="p-3 rounded-lg"
-                  style={{
-                    backgroundColor: themeColors?.surfaceHover,
-                  }}
-                >
-                  <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: themeColors?.textSecondary }}
-                  >
-                    {match.reason}
-                  </p>
-                </div>
-              </div>
+              </article>
             );
           })}
         </div>
-      )}
+
+        <aside className="rounded-xl p-4 xl:sticky xl:top-0" style={{ backgroundColor: themeColors.surface, border: `1px solid ${themeColors.border}` }}>
+          <div className="flex items-center gap-2 mb-3"><History size={16} style={{ color: themeColors.primary }} aria-hidden="true" /><h3 className="font-semibold text-sm" style={{ color: themeColors.text }}>运行记录</h3></div>
+          {runs.length === 0 ? <p className="text-xs" style={{ color: themeColors.textHint }}>尚无匹配批次记录。</p> : <div className="space-y-2 max-h-[540px] overflow-y-auto pr-1">{runs.slice(0, 12).map((run) => <button key={run.id} onClick={() => openRun(run)} className="w-full text-left rounded-lg p-3 transition-colors" style={{ backgroundColor: activeRun?.id === run.id ? themeColors.primaryLight : themeColors.background, border: `1px solid ${activeRun?.id === run.id ? themeColors.primary : themeColors.border}` }}><span className="text-xs font-medium block truncate" style={{ color: themeColors.text }}>{run.selectedDemandTitle || '全部需求批次'}</span><span className="text-[11px] block mt-1" style={{ color: themeColors.textHint }}>{formatRunTime(run.completedAt)} · {run.matchCount} 项结果</span><span className="text-[11px] block mt-1" style={{ color: run.status === 'failed' || run.status === 'not_configured' ? themeColors.error : run.status === 'partial' ? themeColors.warning : themeColors.success }}>{run.status === 'completed' ? '已完成' : run.status === 'partial' ? '部分完成' : run.status === 'no_candidates' ? '无候选' : run.status === 'not_configured' ? '未配置' : '失败'}</span></button>)}</div>}
+          <div className="mt-4 pt-3 text-[11px] leading-relaxed" style={{ borderTop: `1px solid ${themeColors.border}`, color: themeColors.textHint }}>匹配记录与人工复核结论保存在本机；API 密钥不进入匹配记录或数据备份。</div>
+        </aside>
+      </div>
     </div>
   );
 }

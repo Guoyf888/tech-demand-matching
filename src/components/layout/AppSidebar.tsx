@@ -85,7 +85,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     id: 'match',
-    label: '智能匹配',
+    label: '专业匹配',
     icon: <Handshake size={20} strokeWidth={1.75} />,
     path: '/matching',
   },

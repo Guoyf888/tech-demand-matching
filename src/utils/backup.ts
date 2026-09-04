@@ -25,6 +25,7 @@ const EXPORTED_KEYS = [
   'hermes-skills',      // 历史导入技能兼容键
   'hermes-session-memory-v1', // Hermes 会话记忆
   'match_runs',         // 匹配运行审计记录
+  'match_reviews',      // 匹配人工复核记录
 ] as const;
 
 export interface ExportBundle {
