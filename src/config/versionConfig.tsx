@@ -12,9 +12,9 @@ export interface VersionInfo {
 
 // 初始版本信息
 const INIT_VERSION: VersionInfo = {
-  version: 'v2.3.1',
+  version: 'v2.3.2',
   updateTime: '2026-09-05',
-  description: '优化项目期限风险识别、行动优先级与保存状态反馈'
+  description: '修复桌面密钥存储、备份冲突恢复并清理未使用命令权限'
 };
 
 // 全局版本配置Hook

@@ -87,7 +87,7 @@ function projectId(demandId: string, techId: string): string {
   return `${demandId}::${techId}`;
 }
 
-function isMatchProject(value: unknown): value is MatchProject {
+export function isMatchProject(value: unknown): value is MatchProject {
   if (!value || typeof value !== 'object') return false;
   const project = value as Partial<MatchProject>;
   return typeof project.id === 'string'

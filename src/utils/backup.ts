@@ -1,7 +1,7 @@
 /**
  * 数据导入/导出 - 把 localStorage 中的业务数据打包为 JSON 备份
  *
- * 不导出 API Key（存于系统钥匙串，应在新设备上重新输入）。
+ * 不导出独立密钥存储，并清洗模型配置中的密钥字段；业务文档原文保留。
  * 不导出 theme（外观偏好跟随系统/账号）。
  * 不导出 systemVersion（由 version_log.json 决定）。
  *
@@ -9,10 +9,12 @@
  */
 
 import { logger } from './logger';
+import { isMatchProject } from '@/services/storage/matchProjectStorage';
 
 const log = logger;
 
 const SCHEMA_VERSION = 1;
+const BUSINESS_LIST_KEYS = ['demands', 'tech_results', 'skills', 'hermes-skills', 'match_runs', 'match_reviews', 'match_projects'];
 
 const EXPORTED_KEYS = [
   'demands',            // 需求列表
@@ -41,6 +43,31 @@ export interface ImportResult {
   restoredKeys: string[];
   skippedKeys: string[];
   errors: string[];
+  added?: number;
+  updated?: number;
+  retained?: number;
+}
+
+// 仅清洗配置记录中的密钥字段，业务文档内容保持原样。
+function withoutConfigSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutConfigSecrets);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !/^(api[_-]?key|access[_-]?token|secret)$/i.test(key))
+    .map(([key, nested]) => [key, withoutConfigSecrets(nested)]));
+}
+
+function cleanValue(key: string, value: unknown): unknown {
+  return key === 'modelConfigs' || key === 'api-config-storage' ? withoutConfigSecrets(value) : value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function updateTime(value: unknown): number {
+  if (!isRecord(value) || typeof value.updatedAt !== 'string') return 0;
+  const time = Date.parse(value.updatedAt);
+  return Number.isFinite(time) ? time : 0;
 }
 
 function safeRead(key: string): unknown {
@@ -71,7 +98,7 @@ export const backup = {
     const data: Record<string, unknown> = {};
     for (const key of EXPORTED_KEYS) {
       const value = safeRead(key);
-      if (value !== undefined) data[key] = value;
+      if (value !== undefined) data[key] = cleanValue(key, value);
     }
     return {
       schema: SCHEMA_VERSION,
@@ -89,7 +116,7 @@ export const backup = {
   },
 
   /**
-   * 触发浏览器下载（Web 模式）；Tauri 桌面端走文件对话框
+   * 通过下载链接导出（Web / 桌面 WebView）
    */
   download(filename = `tech-demand-backup-${new Date().toISOString().slice(0, 10)}.json`): void {
     const blob = new Blob([this.toJSON()], { type: 'application/json' });
@@ -106,8 +133,8 @@ export const backup = {
   /**
    * 从 JSON 字符串恢复数据
    */
-  importFromJSON(json: string, options: { merge?: boolean } = {}): ImportResult {
-    const result: ImportResult = { success: true, restoredKeys: [], skippedKeys: [], errors: [] };
+  importFromJSON(json: string, options: { merge?: boolean; dryRun?: boolean } = {}): ImportResult {
+    const result: ImportResult = { success: true, restoredKeys: [], skippedKeys: [], errors: [], added: 0, updated: 0, retained: 0 };
     let bundle: ExportBundle;
     try {
       bundle = JSON.parse(json) as ExportBundle;
@@ -115,46 +142,75 @@ export const backup = {
       return { success: false, restoredKeys: [], skippedKeys: [], errors: [`JSON 解析失败: ${err instanceof Error ? err.message : String(err)}`] };
     }
 
-    if (bundle.app !== 'tech-demand-matching') {
+    if (!isRecord(bundle) || bundle.app !== 'tech-demand-matching') {
       return { success: false, restoredKeys: [], skippedKeys: [], errors: ['备份文件不匹配（app 字段错误）'] };
     }
-    if (typeof bundle.schema !== 'number' || bundle.schema > SCHEMA_VERSION) {
+    if (!Number.isInteger(bundle.schema) || bundle.schema < 1 || bundle.schema > SCHEMA_VERSION) {
       return { success: false, restoredKeys: [], skippedKeys: [], errors: [`不支持的备份版本: ${bundle.schema}`] };
     }
-    if (!bundle.data || typeof bundle.data !== 'object') {
+    if (!isRecord(bundle.data)) {
       return { success: false, restoredKeys: [], skippedKeys: [], errors: ['备份文件缺少 data 字段'] };
     }
 
     const merge = options.merge ?? true;
+    const writes: Array<[string, unknown]> = [];
     for (const [key, value] of Object.entries(bundle.data)) {
       if (!(EXPORTED_KEYS as readonly string[]).includes(key)) {
         result.skippedKeys.push(key);
         continue;
       }
       try {
+        if (BUSINESS_LIST_KEYS.includes(key)) {
+          if (!Array.isArray(value) || !value.every((item) => isRecord(item) && typeof item.id === 'string' && item.id.length > 0)) {
+            throw new Error('列表记录必须包含有效 id');
+          }
+          if (key === 'match_projects' && !value.every(isMatchProject)) throw new Error('对接项目字段不完整');
+        }
         if (merge) {
           // 数组类型合并去重
           const existing = safeRead(key);
-          if (Array.isArray(value) && Array.isArray(existing)) {
-            const seen = new Set(existing.map((item: { id?: string }) => item?.id).filter(Boolean));
+          if (BUSINESS_LIST_KEYS.includes(key) && Array.isArray(value) && Array.isArray(existing)) {
+            const positions = new Map(existing.map((item: { id?: string }, index) => [item?.id, index]));
             const merged = [...existing];
             for (const item of value) {
               const id = (item as { id?: string })?.id;
-              if (id && !seen.has(id)) {
+              if (id && !positions.has(id)) {
+                positions.set(id, merged.length);
                 merged.push(item);
-                seen.add(id);
+                result.added! += 1;
+              } else if (id) {
+                const position = positions.get(id)!;
+                if (updateTime(item) > updateTime(merged[position])) {
+                  merged[position] = item;
+                  result.updated! += 1;
+                } else {
+                  result.retained! += 1;
+                }
               }
             }
-            safeWrite(key, merged);
+            writes.push([key, cleanValue(key, merged)]);
           } else {
-            safeWrite(key, value);
+            writes.push([key, cleanValue(key, value)]);
+            if (Array.isArray(value)) result.added! += value.length;
           }
         } else {
-          safeWrite(key, value);
+          writes.push([key, cleanValue(key, value)]);
         }
-        result.restoredKeys.push(key);
       } catch (err) {
         result.errors.push(`${key}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    // 先验证整个文件；预览和真实导入共用同一合并规则。
+    if (result.errors.length === 0) {
+      for (const [key, value] of writes) {
+        try {
+          if (!options.dryRun) safeWrite(key, value);
+          result.restoredKeys.push(key);
+        } catch {
+          result.errors.push(`${key}: 写入失败（可能存储空间不足），部分数据可能已恢复`);
+          break;
+        }
       }
     }
 
@@ -165,11 +221,12 @@ export const backup = {
   /**
    * 触发文件选择对话框（Tauri / Web 通用走 <input type="file">）
    */
-  async pickAndImport(): Promise<ImportResult | null> {
-    return new Promise((resolve) => {
+  async pickFile(): Promise<string | null> {
+    return new Promise((resolve, reject) => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'application/json,.json';
+      input.oncancel = () => resolve(null);
       input.onchange = async () => {
         const file = input.files?.[0];
         if (!file) {
@@ -178,14 +235,9 @@ export const backup = {
         }
         try {
           const text = await file.text();
-          resolve(this.importFromJSON(text));
+          resolve(text);
         } catch (err) {
-          resolve({
-            success: false,
-            restoredKeys: [],
-            skippedKeys: [],
-            errors: [`读取文件失败: ${err instanceof Error ? err.message : String(err)}`],
-          });
+          reject(new Error(`读取文件失败: ${err instanceof Error ? err.message : String(err)}`));
         }
       };
       input.click();

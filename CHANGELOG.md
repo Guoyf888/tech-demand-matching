@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.2] - 2026-09-05
+
+### Fixed
+
+- **密钥存储** - 桌面系统密钥库写入失败不再静默降级；设置页显示真实存储状态，失败不提交新的 Provider 元数据，成功写入和删除时清理旧本地副本。
+- **历史配置迁移** - 等待密钥转存完成后再剥离旧配置中的 apiKey；转存失败保留迁移源。
+- **备份冲突** - 同 ID 业务记录按 updatedAt 保留较新版本；时间相同或无有效时间保留本机，模型配置数组按配置整体恢复。
+- **备份保密** - 导出和导入时剥离模型配置中的已知密钥字段；业务文档原文保持不变，不宣称自动清洗任意文档中的秘密。
+
+### Added
+
+- **恢复预览** - 文件校验和合并预览共用规则，明确新增、更新、保留和覆盖范围，用户确认后写入；写入中断报告部分恢复状态。
+- **回归测试** - 新增密钥失败/删除/旧数据读取、异步迁移、备份冲突/无效输入/空间不足及设置页保存、预览确认和取消测试。
+
+### Changed
+
+- **桌面权限** - 移除未使用的 spawn、stdin-write、kill 声明；保留现有 execute 限制，不新增命令范围或承诺终端 CLI 已联通。
+- **兼容边界** - 保留应用标识 com.techdemand.app 和备份 schema 1，避免无数据迁移方案的安装身份变更；项目结构未变，不人为增加迁移版本。
+- **发布范围** - 版本号统一至 v2.3.2，仅生成 Windows x64 桌面安装包和测试程序，不构建 Android APK。
+
 ## [2.3.1] - 2026-09-05
 
 ### Added

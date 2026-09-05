@@ -18,6 +18,8 @@ export function ApiConfigPanel() {
   const [baseUrl, setBaseUrl] = useState(currentConfig?.baseUrl || providerList.find(p => p.id === activeProvider)?.baseUrl || '');
   const [modelId, setModelId] = useState(currentConfig?.modelId || '');
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loadingKey, setLoadingKey] = useState(true);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -30,13 +32,19 @@ export function ApiConfigPanel() {
   // 从 Keychain 拉取当前 provider 的 API Key；切换 provider 时重新加载
   useEffect(() => {
     let cancelled = false;
+    setLoadingKey(true);
+    setApiKey('');
+    setHasSavedKey(false);
+    setSaved(false);
     void secretStore.get(activeProvider).then((value) => {
       if (cancelled) return;
       setApiKey(value ?? '');
       setHasSavedKey(value !== null && value.length > 0);
-    });
+    }).catch((error) => {
+      if (!cancelled) setValidationError(error instanceof Error ? error.message : '读取密钥失败');
+    }).finally(() => { if (!cancelled) setLoadingKey(false); });
     return () => { cancelled = true; };
-  }, [activeProvider, currentConfig?.baseUrl, currentConfig?.modelId]);
+  }, [activeProvider]);
 
   /**
    * 验证配置输入
@@ -63,17 +71,19 @@ export function ApiConfigPanel() {
 
     setValidationError(null);
 
-    // 元数据持久化到 localStorage（不含 apiKey）
-    setConfig(activeProvider, {
-      baseUrl: baseUrl.trim(),
-      modelId: modelId.trim(),
-    });
-    // apiKey 单独写入 Keychain
-    await secretStore.save(activeProvider, apiKey.trim());
-    setHasSavedKey(true);
-    setSaved(true);
-    setTestResult(null);
-    setTimeout(() => setSaved(false), 2000);
+    setSaving(true);
+    try {
+      await secretStore.save(activeProvider, apiKey.trim());
+      setConfig(activeProvider, { baseUrl: baseUrl.trim(), modelId: modelId.trim() });
+      setHasSavedKey(true);
+      setSaved(true);
+      setTestResult(null);
+    } catch (error) {
+      setSaved(false);
+      setValidationError(error instanceof Error ? error.message : '保存配置失败');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleTest = async () => {
@@ -88,12 +98,13 @@ export function ApiConfigPanel() {
     setTestResult(null);
 
     try {
-      // 先写入内存 + Keychain
+      await secretStore.save(activeProvider, apiKey.trim());
       setConfig(activeProvider, {
         baseUrl: baseUrl.trim(),
         modelId: modelId.trim(),
       });
-      await secretStore.save(activeProvider, apiKey.trim());
+      setHasSavedKey(true);
+      setSaved(true);
 
       // 测试连接
       const response = await apiGateway.chat({
@@ -156,7 +167,11 @@ export function ApiConfigPanel() {
       >
         <span className="inline-flex items-center gap-2">
           <LockKeyhole size={15} aria-hidden="true" />
-          API Key 存储于：{secretStore.isUsingKeychain() ? `系统钥匙串（${hasSavedKey ? '已配置' : '未配置'}）` : '本地存储（降级模式）'}
+          {loadingKey ? '正在读取密钥存储状态…' : secretStore.getStatus(activeProvider) === 'keychain'
+            ? `系统密钥库（${hasSavedKey ? '已配置' : '未配置'}）`
+            : secretStore.getStatus(activeProvider) === 'local'
+              ? '本地兼容存储：仅作混淆，不等同系统加密；桌面端重新保存可迁入系统密钥库。'
+              : '系统密钥库不可用，请检查系统凭据服务后重试。'}
         </span>
       </div>
 
@@ -172,9 +187,10 @@ export function ApiConfigPanel() {
           {providerList.map((p) => (
             <button
               key={p.id}
+              disabled={saving || testing || loadingKey}
               onClick={() => {
                 setActiveProvider(p.id);
-                setBaseUrl(p.baseUrl || '');
+                setBaseUrl(configs[p.id]?.baseUrl || p.baseUrl || '');
                 setModelId(configs[p.id]?.modelId || '');
                 setValidationError(null);
                 setTestResult(null);
@@ -195,17 +211,21 @@ export function ApiConfigPanel() {
       {/* API Key */}
       <div>
         <label
+          htmlFor="provider-api-key"
           className="block text-sm font-medium mb-2"
           style={{ color: themeColors?.text }}
         >
           API Key
-          {hasSavedKey && <span style={{ color: themeColors?.success, marginLeft: 8 }}>✓ 已保存</span>}
+          {hasSavedKey && <span style={{ color: themeColors?.success, marginLeft: 8 }}>✓ 已有存储密钥</span>}
         </label>
         <input
+          id="provider-api-key"
           type="password"
+          disabled={saving || testing || loadingKey}
           value={apiKey}
           onChange={(e) => {
             setApiKey(e.target.value);
+            setSaved(false);
             setValidationError(null);
             setTestResult(null);
           }}
@@ -221,23 +241,27 @@ export function ApiConfigPanel() {
           className="text-xs mt-1"
           style={{ color: themeColors?.textHint }}
         >
-          {selectedProvider?.name} 的API密钥，将加密存入系统钥匙串
+          桌面端保存到系统密钥库；保存失败会明确提示，原有配置保持不变。
         </p>
       </div>
 
       {/* API Endpoint */}
       <div>
         <label
+          htmlFor="provider-api-url"
           className="block text-sm font-medium mb-2"
           style={{ color: themeColors?.text }}
         >
           API 地址
         </label>
         <input
+          id="provider-api-url"
           type="text"
           value={baseUrl}
+          disabled={saving || testing || loadingKey}
           onChange={(e) => {
             setBaseUrl(e.target.value);
+            setSaved(false);
             setValidationError(null);
             setTestResult(null);
           }}
@@ -260,16 +284,20 @@ export function ApiConfigPanel() {
       {/* Model ID */}
       <div>
         <label
+          htmlFor="provider-model-id"
           className="block text-sm font-medium mb-2"
           style={{ color: themeColors?.text }}
         >
           模型 ID
         </label>
         <input
+          id="provider-model-id"
           type="text"
           value={modelId}
+          disabled={saving || testing || loadingKey}
           onChange={(e) => {
             setModelId(e.target.value);
+            setSaved(false);
             setValidationError(null);
             setTestResult(null);
           }}
@@ -293,14 +321,14 @@ export function ApiConfigPanel() {
       <div className="flex gap-3 pt-2">
         <button
           onClick={handleSave}
-          disabled={testing}
+          disabled={testing || saving || loadingKey}
           className="btn-primary px-6"
         >
-          {saved ? '✓ 已保存' : '保存配置'}
+          {saving ? '保存中…' : saved ? '✓ 已保存' : '保存配置'}
         </button>
         <button
           onClick={handleTest}
-          disabled={!apiKey.trim() || !baseUrl.trim() || !modelId.trim() || testing}
+          disabled={!apiKey.trim() || !baseUrl.trim() || !modelId.trim() || testing || saving || loadingKey}
           className="btn-primary px-6"
           style={{ backgroundColor: testing ? themeColors?.textHint : themeColors?.success }}
         >

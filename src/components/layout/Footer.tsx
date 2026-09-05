@@ -14,7 +14,7 @@ export function Footer() {
     let cancelled = false;
     void secretStore.get(activeProvider).then((v) => {
       if (!cancelled) setHasKey(v !== null && v.length > 0);
-    });
+    }).catch(() => { if (!cancelled) setHasKey(false); });
     return () => { cancelled = true; };
   }, [activeProvider, currentConfig]);
 
@@ -35,7 +35,7 @@ export function Footer() {
           <span className="flex items-center gap-1">
             🔑 {hasKey ? 'API已配置' : 'API未配置'}
           </span>
-          <span>{secretStore.isUsingKeychain() ? '🔐 系统钥匙串' : '📦 本地存储'}</span>
+          <span>{secretStore.getStatus(activeProvider) === 'keychain' ? '🔐 系统钥匙串' : '密钥存储状态请查看设置'}</span>
         </div>
         <div>
           <span>v2.1.7 | AI技术经理人</span>

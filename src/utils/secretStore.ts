@@ -9,7 +9,7 @@
  * 浏览器开发环境（npm run dev 而非 tauri dev）：
  *   - 降级到 localStorage + XOR 混淆（仅作开发体验用，仍非密码学安全）
  *
- * API Key 不再明文/不通过自定义算法保存，而是由操作系统加密落盘。
+ * 桌面写入失败明确报错，不静默降级；旧本地副本可读取，成功保存后清理。
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -17,6 +17,8 @@ import { encodeData, decodeData } from './encryptedStorage';
 
 const SERVICE = 'tech-demand-matching';
 const FALLBACK_PREFIX = 'ENC:';
+export type SecretStorageStatus = 'unchecked' | 'keychain' | 'local' | 'unavailable';
+const statuses = new Map<string, SecretStorageStatus>();
 
 function isTauriEnv(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -56,24 +58,37 @@ export const secretStore = {
     if (isTauriEnv()) {
       try {
         await tauriSave(provider, apiKey);
+        localStorage.removeItem(`${SERVICE}:${provider}`);
+        statuses.set(provider, 'keychain');
         return;
-      } catch (err) {
-        // Keychain 不可用时降级到 localStorage，避免阻塞用户
-        console.warn('[secretStore] keychain 写入失败，降级到 localStorage:', err);
+      } catch {
+        statuses.set(provider, 'unavailable');
+        throw new Error('系统密钥库保存失败，密钥未写入本地兼容存储。请检查系统凭据服务后重试。');
       }
     }
     localSave(provider, apiKey);
+    statuses.set(provider, 'local');
   },
 
   async get(provider: string): Promise<string | null> {
     if (isTauriEnv()) {
       try {
         const v = await tauriGet(provider);
-        if (v !== null) return v;
-      } catch (err) {
-        console.warn('[secretStore] keychain 读取失败，降级到 localStorage:', err);
+        if (v !== null) {
+          statuses.set(provider, 'keychain');
+          return v;
+        }
+        const legacy = localGet(provider);
+        statuses.set(provider, legacy ? 'local' : 'keychain');
+        return legacy;
+      } catch {
+        const legacy = localGet(provider);
+        statuses.set(provider, legacy ? 'local' : 'unavailable');
+        if (legacy) return legacy;
+        throw new Error('系统密钥库读取失败，请检查系统凭据服务后重试。');
       }
     }
+    statuses.set(provider, 'local');
     return localGet(provider);
   },
 
@@ -81,13 +96,16 @@ export const secretStore = {
     if (isTauriEnv()) {
       try {
         await invoke('delete_secret', { provider });
-        return;
-      } catch { /* ignore */ }
+      } catch {
+        statuses.set(provider, 'unavailable');
+        throw new Error('系统密钥库删除失败，原密钥仍保留，请重试。');
+      }
     }
     localStorage.removeItem(`${SERVICE}:${provider}`);
+    statuses.set(provider, isTauriEnv() ? 'keychain' : 'local');
   },
 
-  isUsingKeychain(): boolean {
-    return isTauriEnv();
+  getStatus(provider: string): SecretStorageStatus {
+    return statuses.get(provider) || (isTauriEnv() ? 'unchecked' : 'local');
   },
 };

@@ -2,7 +2,7 @@
 
 > **AI技术经理人** — 基于 AI Agent 架构的科技成果转化智能匹配平台
 
-[![Version](https://img.shields.io/badge/version-v2.3.1-blue)]()
+[![Version](https://img.shields.io/badge/version-v2.3.2-blue)]()
 [![Tauri](https://img.shields.io/badge/Tauri-v2.x-FFC131)]()
 [![React](https://img.shields.io/badge/React-18-61DAFB)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6)]()
@@ -134,6 +134,7 @@ public/                         # 静态资源
 
 | 版本 | 日期 | 主要更新 |
 |------|------|----------|
+| v2.3.2 | 2026-09-05 | 桌面密钥写入失败明确报错、清理旧副本，新增备份预览及时间冲突合并，移除未使用命令权限 |
 | v2.3.1 | 2026-09-05 | 优化项目期限风险识别与排序，增加临期提醒、未保存提示并阻止重复保存 |
 | v2.3.0 | 2026-09-05 | 建设对接项目推进台，支持认可结果建档、六阶段跟进、负责人、行动截止日与逾期提醒 |
 | v2.2.0 | 2026-09-05 | 建设专业匹配工作台，支持单需求候选池、四维解释、人工复核与历史批次回看 |
@@ -152,6 +153,8 @@ public/                         # 静态资源
 完整版本日志见 [version_log.json](./version_log.json)。
 
 当前配置、功能与 UI 优化建议见 [v2.3.1 后续路线图](./docs/roadmap-v2.3.1.md)。
+
+本版变更、兼容边界与验证记录见 [v2.3.2 发布记录](./docs/release-v2.3.2.md)。
 
 ## 许可证
 
