@@ -10,6 +10,7 @@
       "【历史】保存匹配结果快照，可回看最近50个运行批次",
       "【匹配】支持指定需求及最低入选分，工作台保留低分有效评估供人工判断",
       "【备份】人工复核记录纳入业务数据导出，API密钥继续排除",
+      "【发布】Windows x64安装程序与便携测试程序构建完成；当前测试阶段不构建Android APK",
       "【版本】package.json/package-lock.json/Cargo.toml/Cargo.lock/tauri.conf.json/versionConfig/README统一至v2.2.0"
     ]
   },
