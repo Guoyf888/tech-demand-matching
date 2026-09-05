@@ -1,4 +1,5 @@
 export type MatchProjectStage = 'contacting' | 'clarifying' | 'validating' | 'negotiating' | 'signed' | 'closed';
+export type MatchProjectDeadlineStatus = 'none' | 'overdue' | 'today' | 'soon' | 'scheduled' | 'closed';
 
 export interface MatchProject {
   id: string;
@@ -29,6 +30,58 @@ export interface CreateMatchProjectInput {
 
 const STORAGE_KEY = 'match_projects';
 const MAX_PROJECTS = 500;
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+export function localDateKey(date = new Date()): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function dateKeyToUtc(value: string): number | null {
+  if (!DATE_KEY_PATTERN.test(value)) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  return parsed.getUTCFullYear() === year
+    && parsed.getUTCMonth() === month - 1
+    && parsed.getUTCDate() === day
+    ? timestamp
+    : null;
+}
+
+export function getMatchProjectDeadlineStatus(
+  project: Pick<MatchProject, 'stage' | 'dueDate'>,
+  today = localDateKey(),
+): MatchProjectDeadlineStatus {
+  if (project.stage === 'signed' || project.stage === 'closed') return 'closed';
+  const dueTime = dateKeyToUtc(project.dueDate);
+  const todayTime = dateKeyToUtc(today);
+  if (dueTime === null || todayTime === null) return 'none';
+  const daysUntilDue = Math.round((dueTime - todayTime) / 86_400_000);
+  if (daysUntilDue < 0) return 'overdue';
+  if (daysUntilDue === 0) return 'today';
+  if (daysUntilDue <= 3) return 'soon';
+  return 'scheduled';
+}
+
+export function compareMatchProjectPriority(a: MatchProject, b: MatchProject, today = localDateKey()): number {
+  const rank = (project: MatchProject): number => {
+    const status = getMatchProjectDeadlineStatus(project, today);
+    if (status === 'overdue') return 0;
+    if (status === 'today') return 1;
+    if (status === 'soon') return 2;
+    if (project.stage === 'signed') return 4;
+    if (project.stage === 'closed') return 5;
+    return 3;
+  };
+  const rankDiff = rank(a) - rank(b);
+  if (rankDiff !== 0) return rankDiff;
+  if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+  return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+}
 
 function projectId(demandId: string, techId: string): string {
   return `${demandId}::${techId}`;

@@ -1,6 +1,6 @@
 [package]
 name = "tech-demand-matching"
-version = "2.3.0"
+version = "2.3.1"
 description = "AI技术经理人"
 authors = ["Guoyf888"]
 edition = "2021"

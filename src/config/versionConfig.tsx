@@ -12,9 +12,9 @@ export interface VersionInfo {
 
 // 初始版本信息
 const INIT_VERSION: VersionInfo = {
-  version: 'v2.3.0',
+  version: 'v2.3.1',
   updateTime: '2026-09-05',
-  description: '建设对接项目推进台，打通匹配认可、项目建档与行动跟进'
+  description: '优化项目期限风险识别、行动优先级与保存状态反馈'
 };
 
 // 全局版本配置Hook

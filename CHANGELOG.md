@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-09-05
+
+### Added
+
+- **临期风险提示** - 区分已逾期、今日到期和 3 日内到期，帮助技术经理人优先处理关键行动
+- **期限逻辑测试** - 覆盖本地日历日期、期限状态和项目风险排序，避免 UTC 日期偏移造成误判
+
+### Changed
+
+- **项目优先级排序** - 项目按逾期、今日到期、临期、常规、已签约和已关闭自动排序
+- **保存状态反馈** - 未修改时禁用重复保存，编辑后明确显示未保存状态，保存完成后恢复只读提示
+- **风险总览** - 统计卡片同时展示逾期与临期数量
+- **后续路线图** - 完成当前配置、功能、桌面 UI、安全、性能与测试覆盖审查，并按 v2.3.2 至 v2.5.0 分期记录
+- **桌面发布范围** - 当前测试阶段仅构建 Windows x64 安装程序和便携测试程序，不构建 Android APK
+- **版本号同步** - package.json、package-lock.json、Cargo.toml、Cargo.lock、tauri.conf.json、versionConfig、关于页、README 与修改记录统一至 v2.3.1
+
 ## [2.3.0] - 2026-09-05
 
 ### Added

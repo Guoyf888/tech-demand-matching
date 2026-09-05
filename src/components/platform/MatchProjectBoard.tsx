@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react';
 import {
+  compareMatchProjectPriority,
+  getMatchProjectDeadlineStatus,
+  localDateKey,
   matchProjectStorage,
   type MatchProject,
+  type MatchProjectDeadlineStatus,
   type MatchProjectStage,
 } from '@/services/storage/matchProjectStorage';
 import { useThemeColors } from '@/store/themeStore';
@@ -18,11 +22,23 @@ const STAGES: Array<{ value: MatchProjectStage; label: string }> = [
 
 const STAGE_LABELS = Object.fromEntries(STAGES.map((stage) => [stage.value, stage.label])) as Record<MatchProjectStage, string>;
 
-function isClosed(project: MatchProject): boolean {
+function isClosed(project: Pick<MatchProject, 'stage'>): boolean {
   return project.stage === 'signed' || project.stage === 'closed';
 }
-function isOverdue(project: MatchProject, today: string): boolean {
-  return Boolean(project.dueDate && project.dueDate < today && !isClosed(project));
+
+function hasProjectChanges(project: MatchProject, draft: MatchProject): boolean {
+  return project.stage !== draft.stage
+    || project.owner !== draft.owner
+    || project.nextAction !== draft.nextAction
+    || project.dueDate !== draft.dueDate
+    || project.note !== draft.note;
+}
+
+function deadlineBadge(status: MatchProjectDeadlineStatus): string | null {
+  if (status === 'overdue') return '已逾期';
+  if (status === 'today') return '今日到期';
+  if (status === 'soon') return '3日内到期';
+  return null;
 }
 
 function formatUpdatedAt(value: string): string {
@@ -40,9 +56,8 @@ export function MatchProjectBoard() {
   const [drafts, setDrafts] = useState<Record<string, MatchProject>>(() => Object.fromEntries(projects.map((project) => [project.id, project])));
   const [stageFilter, setStageFilter] = useState<'all' | MatchProjectStage>('all');
   const [keyword, setKeyword] = useState('');
-  const [savedId, setSavedId] = useState('');
   const themeColors = useThemeColors();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
 
   const visibleProjects = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -51,19 +66,19 @@ export function MatchProjectBoard() {
       if (!normalizedKeyword) return true;
       return [project.demandTitle, project.techTitle, project.owner, project.nextAction]
         .some((value) => value.toLowerCase().includes(normalizedKeyword));
-    });
-  }, [keyword, projects, stageFilter]);
+    }).sort((a, b) => compareMatchProjectPriority(a, b, today));
+  }, [keyword, projects, stageFilter, today]);
 
   const stats = useMemo(() => ({
     total: projects.length,
     active: projects.filter((project) => !isClosed(project)).length,
-    overdue: projects.filter((project) => isOverdue(project, today)).length,
+    overdue: projects.filter((project) => getMatchProjectDeadlineStatus(project, today) === 'overdue').length,
+    dueSoon: projects.filter((project) => ['today', 'soon'].includes(getMatchProjectDeadlineStatus(project, today))).length,
     signed: projects.filter((project) => project.stage === 'signed').length,
   }), [projects, today]);
 
   const updateDraft = (id: string, changes: Partial<MatchProject>) => {
     setDrafts((current) => ({ ...current, [id]: { ...current[id], ...changes } }));
-    setSavedId('');
   };
 
   const saveProject = (id: string) => {
@@ -79,7 +94,6 @@ export function MatchProjectBoard() {
     if (!saved) return;
     setProjects(matchProjectStorage.getAll());
     setDrafts((current) => ({ ...current, [id]: saved }));
-    setSavedId(id);
   };
 
   return (
@@ -88,7 +102,7 @@ export function MatchProjectBoard() {
         {[
           { label: '全部项目', value: stats.total, icon: FolderKanban, color: themeColors.primary },
           { label: '推进中', value: stats.active, icon: CalendarClock, color: themeColors.info },
-          { label: '已逾期', value: stats.overdue, icon: AlertTriangle, color: themeColors.warning },
+          { label: '逾期 / 临期', value: `${stats.overdue} / ${stats.dueSoon}`, icon: AlertTriangle, color: themeColors.warning },
           { label: '已签约', value: stats.signed, icon: CheckCircle2, color: themeColors.success },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="rounded-xl p-4 flex items-center gap-3" style={{ backgroundColor: themeColors.surface, border: `1px solid ${themeColors.border}` }}>
@@ -121,12 +135,15 @@ export function MatchProjectBoard() {
         <div className="space-y-4">
           {visibleProjects.map((project) => {
             const draft = drafts[project.id] || project;
-            const overdue = isOverdue(project, today);
+            const deadlineStatus = getMatchProjectDeadlineStatus(draft, today);
+            const badge = deadlineBadge(deadlineStatus);
+            const changed = hasProjectChanges(project, draft);
+            const deadlineColor = deadlineStatus === 'overdue' ? themeColors.error : deadlineStatus === 'today' || deadlineStatus === 'soon' ? themeColors.warning : themeColors.border;
             return (
-              <article key={project.id} className="rounded-xl p-5" style={{ backgroundColor: themeColors.surface, border: `1px solid ${overdue ? themeColors.warning : themeColors.border}` }}>
+              <article key={project.id} className="rounded-xl p-5" style={{ backgroundColor: themeColors.surface, border: `1px solid ${deadlineColor}` }}>
                 <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                   <div className="min-w-0"><h3 className="font-semibold truncate" style={{ color: themeColors.text }}>{project.demandTitle}</h3><p className="text-sm mt-1 truncate" style={{ color: themeColors.textSecondary }}>对接成果：{project.techTitle}</p></div>
-                  <div className="flex items-center gap-2"><span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: themeColors.primaryLight, color: themeColors.primary }}>{STAGE_LABELS[project.stage]}</span><span className="text-xs font-semibold" style={{ color: themeColors.success }}>匹配 {project.score} 分</span>{overdue && <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: themeColors.warningLight, color: themeColors.warning }}>已逾期</span>}</div>
+                  <div className="flex items-center gap-2"><span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: themeColors.primaryLight, color: themeColors.primary }}>{STAGE_LABELS[draft.stage]}</span><span className="text-xs font-semibold" style={{ color: themeColors.success }}>匹配 {project.score} 分</span>{badge && <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: deadlineStatus === 'overdue' ? themeColors.errorLight : themeColors.warningLight, color: deadlineColor }}>{badge}</span>}</div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -140,7 +157,7 @@ export function MatchProjectBoard() {
                   <label><span className="text-xs font-medium block mb-1.5" style={{ color: themeColors.textSecondary }}>推进备注</span><textarea rows={2} value={draft.note} onChange={(event) => updateDraft(project.id, { note: event.target.value })} placeholder="记录沟通结论、待补材料和风险" className="w-full rounded-lg px-3 py-2 text-sm resize-y outline-none" style={{ backgroundColor: themeColors.background, border: `1px solid ${themeColors.border}`, color: themeColors.text }} /></label>
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span className="text-[11px]" style={{ color: themeColors.textHint }}>最近更新：{formatUpdatedAt(project.updatedAt)}</span><button onClick={() => saveProject(project.id)} className="btn-primary px-4 py-2 text-xs inline-flex items-center gap-1.5"><Save size={14} />{savedId === project.id ? '已保存' : '保存进展'}</button></div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span className="text-[11px]" style={{ color: themeColors.textHint }}>最近更新：{formatUpdatedAt(project.updatedAt)}{changed ? ' · 有未保存修改' : ''}</span><button onClick={() => saveProject(project.id)} disabled={!changed} className="btn-primary px-4 py-2 text-xs inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"><Save size={14} />{changed ? '保存进展' : '已保存'}</button></div>
               </article>
             );
           })}
