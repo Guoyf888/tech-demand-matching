@@ -13,6 +13,7 @@ import {
   type MatchReview,
   type MatchReviewDecision,
 } from '@/services/storage/matchReviewStorage';
+import { matchProjectStorage } from '@/services/storage/matchProjectStorage';
 import type { Demand, TechResult } from '@/types';
 import { useThemeColors } from '@/store/themeStore';
 import {
@@ -20,6 +21,7 @@ import {
   Clock3,
   FileText,
   Filter,
+  FolderKanban,
   Handshake,
   History,
   Lightbulb,
@@ -98,7 +100,11 @@ function formatRunTime(value: string): string {
   });
 }
 
-export function MatchPanel() {
+interface MatchPanelProps {
+  onOpenProjects?: () => void;
+}
+
+export function MatchPanel({ onOpenProjects }: MatchPanelProps) {
   const [demands, setDemands] = useState<Demand[]>([]);
   const [techResults, setTechResults] = useState<TechResult[]>([]);
   const [selectedDemandId, setSelectedDemandId] = useState('');
@@ -106,6 +112,7 @@ export function MatchPanel() {
   const [activeRun, setActiveRun] = useState<MatchRunAudit | null>(null);
   const [runs, setRuns] = useState<MatchRunAudit[]>([]);
   const [reviews, setReviews] = useState<Record<string, MatchReview>>({});
+  const [projectIds, setProjectIds] = useState<Set<string>>(new Set());
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [isMatching, setIsMatching] = useState(false);
   const [unexpectedError, setUnexpectedError] = useState<string | null>(null);
@@ -122,6 +129,7 @@ export function MatchPanel() {
     setSelectedDemandId((current) => current || completedDemands[0]?.id || '');
     setRuns(matchRunStorage.getAll());
     setReviews(Object.fromEntries(storedReviews.map((review) => [review.id, review])));
+    setProjectIds(new Set(matchProjectStorage.getAll().map((project) => project.id)));
   }, []);
 
   const visibleResults = useMemo(() => results.filter((result) => {
@@ -181,6 +189,21 @@ export function MatchPanel() {
       note: noteDrafts[key] ?? reviews[key]?.note ?? '',
     });
     setReviews((current) => ({ ...current, [key]: saved }));
+  };
+
+  const createProject = (result: WorkbenchMatch) => {
+    if (!activeRun) return;
+    const project = matchProjectStorage.create({
+      demandId: result.demandId,
+      demandTitle: result.demandTitle,
+      techId: result.techId,
+      techTitle: result.techTitle,
+      score: result.score,
+      sourceRunId: activeRun.id,
+      nextAction: result.nextStep,
+    });
+    setProjectIds((current) => new Set(current).add(project.id));
+    onOpenProjects?.();
   };
 
   const runStatusLabel = activeRun?.status === 'failed' ? '匹配执行失败'
@@ -303,6 +326,7 @@ export function MatchPanel() {
                   <label className="text-xs font-medium block mb-2" style={{ color: themeColors.textSecondary }}>复核备注</label>
                   <textarea rows={2} value={noteDrafts[key] ?? review?.note ?? ''} onChange={(event) => setNoteDrafts((current) => ({ ...current, [key]: event.target.value }))} placeholder="记录待核验材料、沟通结论或驳回原因" className="w-full rounded-lg px-3 py-2 text-sm resize-y outline-none" style={{ backgroundColor: themeColors.background, border: `1px solid ${themeColors.border}`, color: themeColors.text }} />
                   <div className="flex flex-wrap justify-end gap-2 mt-3">
+                    {decision === 'approved' && <button onClick={() => projectIds.has(key) ? onOpenProjects?.() : createProject(result)} className="px-3 py-2 rounded-lg text-xs inline-flex items-center gap-1.5" style={{ backgroundColor: themeColors.primaryLight, color: themeColors.primary, border: `1px solid ${themeColors.primary}40` }}><FolderKanban size={14} />{projectIds.has(key) ? '查看对接项目' : '创建对接项目'}</button>}
                     <button onClick={() => saveReview(result, 'pending')} className="px-3 py-2 rounded-lg text-xs inline-flex items-center gap-1.5" style={{ backgroundColor: themeColors.background, color: themeColors.textSecondary, border: `1px solid ${themeColors.border}` }}><Clock3 size={14} />待复核</button>
                     <button onClick={() => saveReview(result, 'rejected')} className="px-3 py-2 rounded-lg text-xs inline-flex items-center gap-1.5" style={{ backgroundColor: themeColors.errorLight, color: themeColors.error, border: `1px solid ${themeColors.error}40` }}><XCircle size={14} />驳回</button>
                     <button onClick={() => saveReview(result, 'approved')} className="px-3 py-2 rounded-lg text-xs inline-flex items-center gap-1.5" style={{ backgroundColor: themeColors.successLight, color: themeColors.success, border: `1px solid ${themeColors.success}40` }}><CheckCircle2 size={14} />认可进入对接</button>

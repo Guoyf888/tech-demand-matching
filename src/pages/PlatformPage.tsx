@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { MatchPanel } from '@/components/platform/MatchPanel';
+import { MatchProjectBoard } from '@/components/platform/MatchProjectBoard';
 import { useThemeColors } from '@/store/themeStore';
-import { Target } from 'lucide-react';
+import { FolderKanban, Target } from 'lucide-react';
 
 export function PlatformPage() {
+  const [activeView, setActiveView] = useState<'matching' | 'projects'>('matching');
   const themeColors = useThemeColors();
 
   return (
@@ -15,8 +18,8 @@ export function PlatformPage() {
           <Target size={18} aria-hidden="true" />
         </div>
         <div>
-          <h2 className="text-base font-bold" style={{ color: themeColors?.text }}>专业匹配工作台</h2>
-          <p className="text-xs" style={{ color: themeColors?.textHint }}>候选评估、证据解释、人工复核与批次留痕</p>
+          <h2 className="text-base font-bold" style={{ color: themeColors?.text }}>专业匹配与项目推进台</h2>
+          <p className="text-xs" style={{ color: themeColors?.textHint }}>从候选研判、人工复核到对接项目持续推进</p>
         </div>
       </div>
       <div
@@ -27,7 +30,13 @@ export function PlatformPage() {
           minHeight: 0,
         }}
       >
-        <MatchPanel />
+        <div className="flex gap-2 mb-5" role="tablist" aria-label="专业匹配工作台视图">
+          <button type="button" role="tab" aria-selected={activeView === 'matching'} onClick={() => setActiveView('matching')} className="px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2" style={{ backgroundColor: activeView === 'matching' ? themeColors.primary : themeColors.background, color: activeView === 'matching' ? '#fff' : themeColors.textSecondary, border: `1px solid ${activeView === 'matching' ? themeColors.primary : themeColors.border}` }}><Target size={15} />匹配评估</button>
+          <button type="button" role="tab" aria-selected={activeView === 'projects'} onClick={() => setActiveView('projects')} className="px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2" style={{ backgroundColor: activeView === 'projects' ? themeColors.primary : themeColors.background, color: activeView === 'projects' ? '#fff' : themeColors.textSecondary, border: `1px solid ${activeView === 'projects' ? themeColors.primary : themeColors.border}` }}><FolderKanban size={15} />项目推进</button>
+        </div>
+        {activeView === 'matching'
+          ? <MatchPanel onOpenProjects={() => setActiveView('projects')} />
+          : <MatchProjectBoard />}
       </div>
     </div>
   );

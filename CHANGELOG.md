@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-09-05
+
+### Added
+
+- **对接项目推进台** - 已认可匹配可一键建档，统一跟踪初步对接、需求澄清、技术验证、商务协商、已签约和已关闭六个阶段
+- **行动责任管理** - 支持维护负责人、下一步行动、行动截止日和推进备注
+- **项目风险总览** - 汇总全部项目、推进中、已逾期和已签约数量，并支持阶段与关键词筛选
+- **项目持久化测试** - 覆盖重复建档、进展更新和异常存储数据过滤
+
+### Changed
+
+- **匹配转项目闭环** - 人工认可后的候选可直接创建或查看对应对接项目，同一需求与成果组合只保留一个项目
+- **数据备份** - 对接项目纳入业务数据导出，API 密钥继续排除
+- **桌面发布范围** - 当前测试阶段仅构建 Windows x64 安装程序和便携测试程序，不构建 Android APK
+- **版本号同步** - package.json、package-lock.json、Cargo.toml、Cargo.lock、tauri.conf.json、versionConfig、关于页、README 与修改记录统一至 v2.3.0
+
 ## [2.2.0] - 2026-09-05
 
 ### Added
