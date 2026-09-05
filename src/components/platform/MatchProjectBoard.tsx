@@ -21,7 +21,6 @@ const STAGE_LABELS = Object.fromEntries(STAGES.map((stage) => [stage.value, stag
 function isClosed(project: MatchProject): boolean {
   return project.stage === 'signed' || project.stage === 'closed';
 }
-
 function isOverdue(project: MatchProject, today: string): boolean {
   return Boolean(project.dueDate && project.dueDate < today && !isClosed(project));
 }
@@ -150,4 +149,3 @@ export function MatchProjectBoard() {
     </div>
   );
 }
-

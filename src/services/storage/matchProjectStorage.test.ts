@@ -65,4 +65,3 @@ describe('matchProjectStorage', () => {
     expect(matchProjectStorage.getAll()).toEqual([]);
   });
 });
-
